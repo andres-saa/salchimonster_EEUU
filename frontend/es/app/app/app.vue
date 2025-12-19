@@ -30,25 +30,21 @@ onMounted(async () => {
   const hash = route.query.hash
   
   // ======================================================
-  // 0) CAPTURA DE PARÁMETROS EXTERNOS
+  // 0) CAPTURA DE PARÁMETROS EXTERNOS (inserted_by / token)
   // ======================================================
   const qInsertedBy = route.query.inserted_by
   const qToken = route.query.token
   const qiframe = route.query.iframe
 
-  // ✅ VALIDACIÓN IFRAME (1 o 0):
-  // Comparamos explícitamente con '1'. Si es '1' será true, si es '0' u otra cosa será false.
-  const isIframe = qiframe === '1'
-
   // CAMBIO: Ahora usamos '&&' para exigir que ambos existan
   if (qInsertedBy && qToken) {
-    console.log('🔗 Credenciales completas detectadas.', { inserted_by: qInsertedBy, token: qToken, iframe: isIframe })
+    console.log('🔗 Credenciales completas detectadas. Guardando en Store:', { inserted_by: qInsertedBy, token: qToken })
     
     userStore.user = {
       ...userStore.user,
       inserted_by: qInsertedBy,
       token: qToken,
-      iframe: isIframe // ✅ Guardamos un Boolean real, no el string '1'/'0'
+      iframe:qiframe
     }
   }
 
@@ -64,26 +60,71 @@ onMounted(async () => {
         const jsonResponse = await response.json()
         const restoredData = jsonResponse?.data || {}
 
-        // A) Restaurar Sede
+        // A) Restaurar Sede (Contexto visual)
         if (restoredData.site_location) {
           siteStore.location.site = restoredData.site_location
           siteStore.initStatusWatcher()
           siteLoadedFromHash = true
         }
 
-        // B) Restaurar Usuario
+        // B) Restaurar Usuario (Merge con lo que acabamos de guardar de los params)
         if (restoredData.user) {
           userStore.user = {
             ...userStore.user,
-            ...restoredData.user,
-            // Si el hash trae un valor de iframe, decidimos si el de la URL (isIframe) tiene prioridad
-            // Usualmente el parámetro de URL fresco manda sobre el hash antiguo:
-            iframe: isIframe || restoredData.user.iframe 
+            ...restoredData.user
           }
         }
 
-        // ... (Lógica de Location omitida para brevedad, se mantiene igual) ...
-        // ... (Copia tu bloque de Location/Costo aquí) ...
+        // ======================================================
+        // ✅ C) HIDRATAR LOCATION PARA CHECKOUT
+        // ======================================================
+
+        // 1) PRIORIDAD: location_meta
+        const metaCity = restoredData?.location_meta?.city
+        const metaNb = restoredData?.location_meta?.neigborhood
+
+        if (metaCity) {
+          siteStore.location.city = metaCity
+        }
+
+        if (metaNb) {
+          siteStore.location.neigborhood = {
+            ...(siteStore.location.neigborhood || {}),
+            ...metaNb,
+            neighborhood_id: metaNb.neighborhood_id ?? metaNb.id ?? (siteStore.location.neigborhood?.neighborhood_id),
+            name: metaNb.name ?? siteStore.location.neigborhood?.name,
+            delivery_price: metaNb.delivery_price ?? siteStore.location.neigborhood?.delivery_price
+          }
+        }
+
+        // 2) FALLBACK: user.site
+        const userSite = userStore.user?.site || restoredData?.user?.site
+        const siteNb = userSite?.neighborhood || userSite?.neigborhood
+        
+        if (siteNb && !siteStore.location.neigborhood?.name) {
+          siteStore.location.neigborhood = {
+            ...(siteStore.location.neigborhood || {}),
+            ...siteNb,
+            neighborhood_id: siteNb.neighborhood_id ?? siteNb.id ?? (siteStore.location.neigborhood?.neighborhood_id),
+            name: siteNb.name ?? siteStore.location.neigborhood?.name,
+            delivery_price: siteNb.delivery_price ?? siteStore.location.neigborhood?.delivery_price
+          }
+        }
+
+        // 3) COSTO
+        const deliveryCostCop = userSite?.delivery_cost_cop
+        if (deliveryCostCop != null) {
+          if (!siteStore.location.neigborhood) siteStore.location.neigborhood = {}
+          if (siteStore.location.neigborhood.delivery_price == null) {
+            console.log('✅ Precio de domicilio hidratado desde Hash:', deliveryCostCop)
+            siteStore.location.neigborhood.delivery_price = deliveryCostCop
+          }
+        }
+
+        // 4) Dirección exacta
+        if (restoredData?.user?.address && !userStore.user?.address) {
+          userStore.user.address = restoredData.user.address
+        }
 
         // C) Restaurar Carrito
         if (restoredData.cart) {
@@ -98,24 +139,21 @@ onMounted(async () => {
 
         // D) Restaurar Cupón
         if (restoredData.discount) {
+          console.log('🎟️ Cupón restaurado desde Hash:', restoredData.discount)
           cartStore.applyCoupon(restoredData.discount)
         }
+
         if (restoredData.coupon_ui && cartStore.setCouponUi) {
           cartStore.setCouponUi(restoredData.coupon_ui)
         }
 
-        // E) Limpiar la URL
+        // E) Limpiar la URL (Hash + Params insertados)
+        // Nota: Solo limpiamos inserted_by/token si realmente los procesamos (si existían ambos)
         const queryToClean = { ...route.query, hash: undefined }
         
         if (qInsertedBy && qToken) {
            queryToClean.inserted_by = undefined
            queryToClean.token = undefined
-        }
-
-        // ✅ LIMPIEZA ROBUSTA DE IFRAME:
-        // Usamos '!== undefined' para asegurarnos de limpiar incluso si viene ?iframe=0
-        if (qiframe !== undefined) {
-           queryToClean.iframe = undefined
         }
 
         router.replace({ query: queryToClean })
@@ -144,28 +182,20 @@ onMounted(async () => {
           if (siteData) {
             siteStore.location.site = siteData
             siteStore.initStatusWatcher()
+            console.log(siteData)
           }
         }
       }
       
-      // Limpieza de params en carga normal
-      const queryToClean = { ...route.query }
-      let needsClean = false
-
+      // Si no hubo hash pero sí llegaron AMBOS params, limpiamos la URL
       if (qInsertedBy && qToken) {
-          queryToClean.inserted_by = undefined
-          queryToClean.token = undefined
-          needsClean = true
-      }
-
-      // ✅ También limpiamos el iframe en la carga normal si es necesario
-      if (qiframe !== undefined) {
-          queryToClean.iframe = undefined
-          needsClean = true
-      }
-
-      if (needsClean) {
-          router.replace({ query: queryToClean })
+         router.replace({ 
+          query: { 
+            ...route.query, 
+            inserted_by: undefined,
+            token: undefined
+          } 
+        })
       }
 
     } catch (err) {
