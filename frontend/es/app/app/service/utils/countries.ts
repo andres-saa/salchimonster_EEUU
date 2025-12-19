@@ -1,46 +1,50 @@
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js'
-// 1. CORRECCIÓN: Cambiar 'import * as ...' por 'import ...' 
-// Esto asegura que accedas directamente al objeto que contiene las funciones
-import isoCountries from 'i18n-iso-countries'
 
-import en from 'i18n-iso-countries/langs/en.json'
-import es from 'i18n-iso-countries/langs/es.json'
-
-// 2. Registro de idiomas
-// El 'as any' está bien para evitar conflictos de tipos estrictos en JSON
-isoCountries.registerLocale(en as any)
-isoCountries.registerLocale(es as any)
+// 1. ELIMINAMOS TODAS las importaciones de 'i18n-iso-countries'
+// Adiós a los errores de compilación y imports dinámicos.
 
 export type CountryOption = {
-  code: string;   // "US", "CO"
-  name: string;   // "United States", "Colombia"
-  dialCode: string; // "+1", "+57"
-  flag: string;   // flagcdn url
-  label: string;  // mostrado en el Select
-  dialDigits?: string; // "1", "57"
+  code: string        // "CO"
+  name: string        // "Colombia"
+  dialCode: string    // "+57"
+  flag: string        // URL bandera
+  label: string       // Texto para el select
+  dialDigits?: string // "57"
 }
 
 export function buildCountryOptions(locale: 'es'|'en' = 'es'): CountryOption[] {
+  // 2. Instanciamos el traductor nativo de regiones
+  // Esto usa la base de datos interna de Node/Navegador
+  const regionNames = new Intl.DisplayNames([locale], { type: 'region' })
+
   const codes = getCountries()
-  
-  const opts: CountryOption[] = codes.map(code => {
-    // 3. Uso directo de isoCountries (que ahora es el objeto correcto)
-    const name = isoCountries.getName(code, locale) || code
+
+  const opts: CountryOption[] = codes.map((code) => {
+    // 3. Obtenemos el nombre traducido nativamente
+    // Si falla por alguna razón rara, usamos el código como fallback
+    let name = code
+    try {
+      name = regionNames.of(code) || code
+    } catch (e) {
+      // Manejo de error silencioso por si el código es exótico
+      name = code
+    }
+
     const dial = '+' + getCountryCallingCode(code)
     const flag = `https://flagcdn.com/w20/${code.toLowerCase()}.png`
-    
+
     return {
       code,
       name,
       dialCode: dial,
       flag,
-      label: `${dial}`,
-      dialDigits: dial.replace(/\D+/g, '')
+      label: `${dial}  ${name}`, // Ajusté el label para que se vea mejor
+      dialDigits: dial.replace(/\D+/g, ''),
     }
   })
 
-  // Ordenar alfabéticamente
+  // Ordenar alfabéticamente respetando acentos (Á antes que B)
   opts.sort((a, b) => a.name.localeCompare(b.name, locale))
-  
+
   return opts
 }
