@@ -1,38 +1,64 @@
+// ~/utils/countries.ts
 import { getCountries, getCountryCallingCode } from 'libphonenumber-js'
 import isoCountries from 'i18n-iso-countries'
 
-// Importación ESTÁTICA de los idiomas (Crucial para que Vite/Rollup no fallen)
+// ✅ Importación ESTÁTICA (Vite/Rollup lo soporta bien)
 import en from 'i18n-iso-countries/langs/en.json'
 import es from 'i18n-iso-countries/langs/es.json'
 
-// Registrar los idiomas disponibles
-// "as any" es necesario aquí porque la estructura del JSON a veces difiere 
-// ligeramente de la interfaz estricta de la librería en TypeScript.
-isoCountries.registerLocale(en as any)
-isoCountries.registerLocale(es as any)
+export type SupportedLocale = 'es' | 'en'
 
 export type CountryOption = {
-  code: string;       // Ejemplo: "CO"
-  name: string;       // Ejemplo: "Colombia"
-  dialCode: string;   // Ejemplo: "+57"
-  flag: string;       // URL de la bandera
-  label: string;      // Texto para el selector
-  dialDigits?: string; // Solo números: "57"
+  code: string        // "CO"
+  name: string        // "Colombia"
+  dialCode: string    // "+57"
+  flag: string        // URL bandera
+  label: string       // Texto para el select
+  dialDigits?: string // "57"
 }
 
-export function buildCountryOptions(locale: 'es' | 'en' = 'es'): CountryOption[] {
-  // 1. Obtener todos los códigos ISO disponibles en libphonenumber
+// ---- Registro de locales SOLO una vez ----
+let localesRegistered = false
+function ensureLocalesRegistered() {
+  if (localesRegistered) return
+  isoCountries.registerLocale(en as any)
+  isoCountries.registerLocale(es as any)
+  localesRegistered = true
+}
+
+// ---- Normaliza cualquier locale raro a 'es' o 'en' ----
+// Ej: "es-CO" -> "es", "en-US" -> "en", "pt-BR" -> "es", "br" -> "es"
+export function normalizeLocale(input?: string): SupportedLocale {
+  const raw = (input || '').toLowerCase().trim()
+
+  if (raw.startsWith('en')) return 'en'
+  if (raw.startsWith('es')) return 'es'
+
+  // Cualquier otra cosa (pt, br, fr, etc) => fallback
+  return 'es'
+}
+
+// ---- Cache para no recalcular la lista cada render ----
+const cache: Record<SupportedLocale, CountryOption[] | null> = {
+  es: null,
+  en: null,
+}
+
+export function buildCountryOptions(localeLike: string = 'es'): CountryOption[] {
+  ensureLocalesRegistered()
+
+  const locale = normalizeLocale(localeLike)
+
+  // ✅ Devuelve cache si ya existe
+  const cached = cache[locale]
+  if (cached) return cached
+
   const codes = getCountries()
 
-  // 2. Mapear a nuestro formato
-  const opts: CountryOption[] = codes.map(code => {
-    // Intentar obtener el nombre traducido, si falla usar el código
+  const opts: CountryOption[] = codes.map((code) => {
+    // ✅ OJO: aquí usamos locale ya normalizado ('es'|'en')
     const name = isoCountries.getName(code, locale) || code
-    
-    // Obtener código de llamada
     const dial = '+' + getCountryCallingCode(code)
-    
-    // Generar URL de la bandera (FlagCDN es rápido y gratuito)
     const flag = `https://flagcdn.com/w20/${code.toLowerCase()}.png`
 
     return {
@@ -40,13 +66,13 @@ export function buildCountryOptions(locale: 'es' | 'en' = 'es'): CountryOption[]
       name,
       dialCode: dial,
       flag,
-      label: `${dial}  ${name}`, // Ajusta esto según cómo quieras que se vea en el Select
-      dialDigits: dial.replace(/\D+/g, '') // Elimina el "+" para dejar solo números
+      label: `${dial}  ${name}`,
+      dialDigits: dial.replace(/\D+/g, ''),
     }
   })
 
-  // 3. Ordenar alfabéticamente por el nombre del país
   opts.sort((a, b) => a.name.localeCompare(b.name, locale))
 
+  cache[locale] = opts
   return opts
 }

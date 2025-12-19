@@ -5,6 +5,13 @@ export default defineNuxtConfig({
   build: {
     transpile: ['i18n-iso-countries']
   },
+  nitro: {
+    commonJS: {
+      dynamicRequireTargets: [
+        'node_modules/i18n-iso-countries/langs/*.json',
+      ],
+    },
+  },
   
   modules: [
     '@nuxt/eslint',
