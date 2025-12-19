@@ -36,19 +36,19 @@ export default defineNuxtConfig({
     },
   },
 
-  // 🧊 ISR / SWR: Configuración de caché
-  routeRules: {
-    // Home se regenera cada 10 min
-    '/': { isr: 600 },
-    // Sedes se regenera cada 10 min (600s)
-    '/sedes': { isr: 10 },
+  // // 🧊 ISR / SWR: Configuración de caché
+  // routeRules: {
+  //   // Home se regenera cada 10 min
+  //   '/': { isr: 600 },
+  //   // Sedes se regenera cada 10 min (600s)
+  //   '/sedes': { isr: 10 },
  
-    // Reemplaza '/ayuda' por la ruta donde usas este componente
-    '/pqr': { isr: 3600 } ,
+  //   // Reemplaza '/ayuda' por la ruta donde usas este componente
+  //   '/pqr': { isr: 3600 } ,
  
-    // Opcional: Cachear assets estáticos agresivamente
-    '/_nuxt/**': { headers: { 'cache-control': 's-maxage=31536000' } },
-  },
+  //   // Opcional: Cachear assets estáticos agresivamente
+  //   '/_nuxt/**': { headers: { 'cache-control': 's-maxage=31536000' } },
+  // },
 
   // 🖼️ OPTIMIZACIÓN EXTREMA DE IMÁGENES
   image: {
