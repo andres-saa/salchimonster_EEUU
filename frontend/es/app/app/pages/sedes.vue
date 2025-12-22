@@ -234,7 +234,7 @@ const filteredSedes = computed(() => {
     s.city_id &&
     s.show_on_web &&
     !s.comming_soon &&
-    s.time_zone === 'America/Bogota' &&
+    s.time_zone === 'America/New_York' &&
     Number(s.site_id) !== 32
   )
 })

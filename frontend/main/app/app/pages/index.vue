@@ -7,9 +7,9 @@
             <Icon name="mdi:rocket-launch-outline" size="3em" class="rocket-icon" />
             <div class="pulse-ring"></div>
           </div>
-          <h2 class="redirect-title">Te estamos llevando a</h2>
+          <h2 class="redirect-title">{{ t('redirect_title') }}</h2>
           <h3 class="redirect-store">{{ targetSiteName }}</h3>
-          <p class="redirect-subtitle">Iniciando tu experiencia...</p>
+          <p class="redirect-subtitle">{{ t('redirect_subtitle') }}</p>
         </div>
       </div>
     </Transition>
@@ -17,7 +17,6 @@
     <!-- ✅ App-like shell: sin scroll global, todo ocurre dentro -->
     <div class="vicio-page" :class="{ 'is-map-collapsed': shouldCollapseMap }">
       <ClientOnly>
-        <!-- ✅ Shell para animar el alto del mapa sin destruir Leaflet -->
         <div class="vicio-map-shell">
           <div id="vicio-map" class="vicio-map"></div>
         </div>
@@ -25,34 +24,43 @@
 
       <div class="vicio-sidebar">
         <header class="sidebar-header">
-          <h2 class="sidebar-title">ELIGE TU SALCHIMONSTER MÁS CERCANO</h2>
+          <div class="sidebar-top-row">
+            <h2 class="sidebar-title">{{ t('choose_nearest') }}</h2>
 
-          <!-- CIUDAD (PrimeVue Select) -->
-          <div class="city-select-wrapper">
-            <label class="city-label" for="city-filter">Ciudad</label>
+            <!-- ✅ Selector idioma (local + localStorage) -->
+            <div class="lang-wrap" ref="langWrapRef">
+              <button class="lang-btn" type="button" @click="toggleLangMenu" :aria-label="t('language')">
+                <img :src="currentLang.flag" class="lang-flag" :alt="currentLang.label" />
+                <span class="lang-label">{{ currentLang.label }}</span>
+                <Icon name="mdi:chevron-down" size="1.2em" class="lang-chevron" />
+              </button>
 
-            <Select
-              inputId="city-filter"
-              v-model="selectedCityId"
-              :options="citySelectOptions"
-              optionLabel="city_name"
-              optionValue="city_id"
-              placeholder="Todas las ciudades"
-              filter
-              style="width: 100%;"
-              showClear
-              class="w-full"
-              @update:modelValue="onCityChange"
-            />
+              <div v-if="langMenuOpen" class="lang-menu" role="menu">
+                <button
+                  v-for="opt in languageOptions"
+                  :key="opt.value"
+                  class="lang-option"
+                  type="button"
+                  role="menuitem"
+                  @click="selectLang(opt.value)"
+                >
+                  <img :src="opt.flag" class="lang-flag" :alt="opt.label" />
+                  <span>{{ opt.label }}</span>
+                  <Icon v-if="opt.value === lang" name="mdi:check" size="1.1em" class="lang-check" />
+                </button>
+              </div>
+            </div>
           </div>
 
+          <!-- ✅ (CIUDAD FIJA) Se elimina selector y cualquier control para cambiar ciudad -->
+
           <!-- GOOGLE CITY: AUTOCOMPLETE DIRECCION -->
-          <div class="search-wrapper" v-if="selectedCityId && isGoogleCity">
+          <div class="search-wrapper" v-if="isGoogleCity">
             <AutoComplete
               v-model="addressQuery"
               :suggestions="suggestions"
               optionLabel="description"
-              placeholder="Escribe tu dirección..."
+              :placeholder="t('type_address')"
               class="w-full"
               :minLength="3"
               :delay="250"
@@ -70,9 +78,9 @@
           </div>
 
           <!-- PARAMS CITY: BARRIOS + DIRECCION EXACTA -->
-          <div v-if="selectedCityId && isParamsCity" class="params-box">
+          <div v-if="isParamsCity" class="params-box">
             <div class="form-group">
-              <label class="city-label">Barrio / Sector</label>
+              <label class="city-label">{{ t('neighborhood_sector') }}</label>
 
               <AutoComplete
                 v-model="selectedNeighborhood"
@@ -82,7 +90,7 @@
                 :minLength="1"
                 :delay="150"
                 :disabled="loadingNeighborhoods || neighborhoods.length === 0"
-                :placeholder="loadingNeighborhoods ? 'Cargando barrios...' : (neighborhoods.length ? 'Escribe para buscar...' : 'No hay barrios')"
+                :placeholder="loadingNeighborhoods ? t('loading_neighborhoods') : (neighborhoods.length ? t('type_to_search') : t('no_neighborhoods'))"
                 @complete="onNeighborhoodComplete"
                 dropdown
                 style="width: 100%;"
@@ -98,12 +106,12 @@
             </div>
 
             <div class="form-group" style="margin-top:.7rem;">
-              <label class="city-label">Dirección exacta</label>
+              <label class="city-label">{{ t('exact_address') }}</label>
               <InputText
                 style="width: 100%;"
                 v-model="paramExactAddress"
                 class="w-full"
-                placeholder="Ej: Calle 123 # 45 - 67..."
+                :placeholder="t('exact_address_ph')"
               />
             </div>
           </div>
@@ -113,19 +121,19 @@
         <section v-if="coverageResult && isGoogleCity" class="coverage-card">
           <div class="coverage-header">
             <Icon name="mdi:map-marker-check" size="1.4em" class="coverage-icon" />
-            <h3 class="coverage-title">Resultado de búsqueda</h3>
+            <h3 class="coverage-title">{{ t('search_result') }}</h3>
           </div>
 
           <div class="coverage-body">
             <div class="coverage-row">
-              <span class="coverage-label">Dirección:</span>
+              <span class="coverage-label">{{ t('address') }}</span>
               <span class="coverage-value address-text">{{ coverageResult.formatted_address }}</span>
             </div>
 
             <div class="coverage-row">
-              <span class="coverage-label">Sede más cercana:</span>
+              <span class="coverage-label">{{ t('nearest_store') }}</span>
               <span class="coverage-value">
-                {{ coverageResult.nearest?.site?.site_name || 'N/A' }}
+                {{ coverageResult.nearest?.site?.site_name || t('na') }}
                 <small v-if="coverageResult.nearest">
                   ({{ Number(coverageResult.nearest.distance_km || 0).toFixed(1) }} km)
                 </small>
@@ -133,12 +141,12 @@
             </div>
 
             <div class="coverage-row highlight">
-              <span class="coverage-label">Costo envío:</span>
+              <span class="coverage-label">{{ t('delivery_cost') }}</span>
               <span class="coverage-value price">{{ formatCOP(coverageResult.delivery_cost_cop) }}</span>
             </div>
 
             <div class="coverage-status-text" :class="coverageResult.nearest?.in_coverage ? 'text-ok' : 'text-fail'">
-              {{ coverageResult.nearest?.in_coverage ? '✅ Cubrimos tu zona' : '❌ Fuera de zona de entrega' }}
+              {{ coverageResult.nearest?.in_coverage ? t('in_coverage') : t('out_of_coverage') }}
             </div>
           </div>
 
@@ -155,7 +163,7 @@
               <template #icon>
                 <Icon name="mdi:moped" size="1.2em" />
               </template>
-              <span>Domicilio</span>
+              <span>{{ t('delivery') }}</span>
             </Button>
           </div>
         </section>
@@ -164,21 +172,21 @@
         <section v-if="isParamsCity && selectedNeighborhood" class="coverage-card">
           <div class="coverage-header">
             <Icon name="mdi:home-map-marker" size="1.4em" class="coverage-icon" />
-            <h3 class="coverage-title">Tu zona (Por Barrios)</h3>
+            <h3 class="coverage-title">{{ t('your_zone_by_neighborhood') }}</h3>
           </div>
 
           <div class="coverage-body">
             <div class="coverage-row">
-              <span class="coverage-label">Barrio:</span>
+              <span class="coverage-label">{{ t('neighborhood') }}</span>
               <span class="coverage-value">{{ selectedNeighborhood?.name || '—' }}</span>
             </div>
 
             <div class="coverage-row highlight">
-              <span class="coverage-label">Costo envío:</span>
+              <span class="coverage-label">{{ t('delivery_cost') }}</span>
               <span class="coverage-value price">{{ formatCOP(paramDeliveryPrice) }}</span>
             </div>
 
-            <div class="coverage-status-text text-ok">✅ Listo para enviar</div>
+            <div class="coverage-status-text text-ok">{{ t('ready_to_send') }}</div>
           </div>
 
           <div class="coverage-actions">
@@ -190,12 +198,12 @@
               <template #icon>
                 <Icon name="mdi:moped" size="1.2em" />
               </template>
-              <span>Domicilio</span>
+              <span>{{ t('delivery') }}</span>
             </Button>
           </div>
         </section>
 
-        <!-- LISTA SEDES (✅ scroll interno, no global) -->
+        <!-- LISTA SEDES (scroll interno) -->
         <main class="stores-list">
           <article
             v-for="store in filteredStores"
@@ -210,7 +218,7 @@
                 @load="loadHighResImage(store)"
                 @error="onImgError(store)"
                 class="store-img"
-                alt="Foto sede"
+                :alt="t('store_photo_alt')"
               />
             </div>
 
@@ -230,9 +238,9 @@
 
               <button class="store-action" :data-status="store.status || 'unknown'">
                 <span v-if="store.status === 'open'" class="status-flex">
-                  <Icon name="mdi:check-circle-outline" size="1.1em" /> Abierto
+                  <Icon name="mdi:check-circle-outline" size="1.1em" /> {{ t('open') }}
                 </span>
-                <span v-else class="status-flex">Cerrado</span>
+                <span v-else class="status-flex">{{ t('closed') }}</span>
               </button>
             </div>
 
@@ -259,8 +267,8 @@
 
           <!-- STEP 1 -->
           <div v-if="modalStep === 1">
-            <h3 class="modal-title">¿Cómo quieres tu pedido?</h3>
-            <p class="modal-subtitle">Sede: <strong>{{ modalStore.name }}</strong></p>
+            <h3 class="modal-title">{{ t('how_want_order') }}</h3>
+            <p class="modal-subtitle">{{ t('store_label') }} <strong>{{ modalStore.name }}</strong></p>
 
             <div class="modal-actions">
               <Button
@@ -272,7 +280,7 @@
                 severity="secondary"
               >
                 <Icon :name="getIconForOrderType(ot.id)" size="1.8em" />
-                <span>{{ ot.name }}</span>
+                <span>{{ lang === 'en' ? tOrderTypeName(ot) : ot.name }}</span>
               </Button>
             </div>
           </div>
@@ -282,19 +290,19 @@
             <div class="modal-header-nav">
               <Button text class="modal-back-btn" @click="setModalStep(1)">
                 <Icon name="mdi:arrow-left" size="1.2em" />
-                <span>Volver</span>
+                <span>{{ t('back') }}</span>
               </Button>
             </div>
 
             <!-- GOOGLE MODAL -->
             <div v-if="isGoogleCity">
-              <h3 class="modal-title">¿Dónde estás?</h3>
+              <h3 class="modal-title">{{ t('where_are_you') }}</h3>
 
               <AutoComplete
                 v-model="modalAddressQuery"
                 :suggestions="modalSuggestions"
                 optionLabel="description"
-                placeholder="Calle 123 # 45 - 67..."
+                :placeholder="t('modal_address_ph')"
                 class="w-full"
                 :minLength="3"
                 style="width: 100%;"
@@ -316,17 +324,17 @@
 
             <!-- PARAMS MODAL -->
             <div v-else class="params-flow-modal">
-              <h3 class="modal-title">Datos de Entrega</h3>
+              <h3 class="modal-title">{{ t('delivery_details') }}</h3>
 
               <div class="form-group">
-                <label class="city-label">Busca tu Barrio</label>
+                <label class="city-label">{{ t('search_your_neighborhood') }}</label>
 
                 <AutoComplete
                   v-model="modalSelectedNeighborhood"
                   :suggestions="modalNbSuggestions"
                   optionLabel="name"
                   class="w-full"
-                  placeholder="Escribe para buscar..."
+                  :placeholder="t('type_to_search')"
                   :minLength="1"
                   style="width:100%;"
                   :delay="150"
@@ -338,22 +346,22 @@
 
               <div v-if="modalSelectedNeighborhood" style="margin: 1rem 0;" class="selected-nb-info">
                 <div class="info-row">
-                  <span>Barrio: </span>
+                  <span>{{ t('neighborhood') }} </span>
                   <strong>{{ modalSelectedNeighborhood.name }}</strong>
                 </div>
                 <div class="info-row">
-                  <span>Domicilio: </span>
+                  <span>{{ t('delivery_cost') }} </span>
                   <strong class="text-green">{{ formatCOP(Number(modalSelectedNeighborhood.delivery_price || 0)) }}</strong>
                 </div>
               </div>
 
               <div class="form-group" style="margin-top: 1rem;">
-                <label class="city-label">Dirección Exacta</label>
+                <label class="city-label">{{ t('exact_address_modal') }}</label>
                 <InputText
                   style="width: 100%;"
                   v-model="modalParamAddress"
                   class="w-full"
-                  placeholder="Ej: Calle 123 # 45 - 67 Apt 201"
+                  :placeholder="t('exact_address_modal_ph')"
                 />
               </div>
 
@@ -366,7 +374,7 @@
                 <template #icon>
                   <Icon name="mdi:moped" size="1.2em" />
                 </template>
-                <span>Confirmar Domicilio</span>
+                <span>{{ t('confirm_delivery') }}</span>
               </Button>
             </div>
           </div>
@@ -374,7 +382,7 @@
           <!-- STEP 3 -->
           <div v-else-if="modalStep === 3" class="modal-loading-view">
             <ProgressSpinner style="width:48px;height:48px" />
-            <p>Validando cobertura...</p>
+            <p>{{ t('validating_coverage') }}</p>
           </div>
 
           <!-- STEP 4 -->
@@ -384,23 +392,23 @@
                 <template #icon>
                   <Icon name="mdi:arrow-left" size="1.2em" />
                 </template>
-                <span>Volver</span>
+                <span>{{ t('back') }}</span>
               </Button>
             </div>
 
-            <h3 class="modal-title">Resumen de Cobertura</h3>
+            <h3 class="modal-title">{{ t('coverage_summary') }}</h3>
 
             <div class="coverage-card" style="margin: 1rem 0; width: auto; border: none; box-shadow: none; background: transparent;">
               <div class="coverage-body" style="padding: 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem;">
                 <div class="coverage-row">
-                  <span class="coverage-label">Dirección:</span>
+                  <span class="coverage-label">{{ t('address') }}</span>
                   <span class="coverage-value address-text">{{ modalCoverageResult.formatted_address }}</span>
                 </div>
 
                 <div class="coverage-row">
-                  <span class="coverage-label">Sede asignada:</span>
+                  <span class="coverage-label">{{ t('assigned_store') }}</span>
                   <span class="coverage-value">
-                    {{ modalCoverageResult.nearest?.site?.site_name || 'N/A' }}
+                    {{ modalCoverageResult.nearest?.site?.site_name || t('na') }}
                     <small v-if="modalCoverageResult.nearest">
                       ({{ Number(modalCoverageResult.nearest.distance_km || 0).toFixed(1) }} km)
                     </small>
@@ -408,12 +416,12 @@
                 </div>
 
                 <div class="coverage-row highlight">
-                  <span class="coverage-label">Costo envío:</span>
+                  <span class="coverage-label">{{ t('delivery_cost') }}</span>
                   <span class="coverage-value price">{{ formatCOP(modalCoverageResult.delivery_cost_cop) }}</span>
                 </div>
 
                 <div class="coverage-status-text" :class="modalCoverageResult.nearest?.in_coverage ? 'text-ok' : 'text-fail'">
-                  {{ modalCoverageResult.nearest?.in_coverage ? '✅ Cubrimos tu zona' : '❌ Fuera de zona de entrega' }}
+                  {{ modalCoverageResult.nearest?.in_coverage ? t('in_coverage') : t('out_of_coverage') }}
                 </div>
               </div>
             </div>
@@ -427,7 +435,7 @@
               <template #icon>
                 <Icon name="mdi:check-circle-outline" size="1.2em" />
               </template>
-              <span>Confirmar e Ir</span>
+              <span>{{ t('confirm_and_go') }}</span>
             </Button>
           </div>
         </div>
@@ -445,9 +453,169 @@ import 'leaflet/dist/leaflet.css'
 import Dialog from 'primevue/dialog'
 import AutoComplete from 'primevue/autocomplete'
 import InputText from 'primevue/inputtext'
-import Select from 'primevue/select'
 import Button from 'primevue/button'
 import ProgressSpinner from 'primevue/progressspinner'
+
+/* =======================
+   ✅ I18N LOCAL (sin Pinia)
+   ======================= */
+const LANG_KEY = 'vicio_lang'
+const lang = ref('es')
+const langMenuOpen = ref(false)
+const langWrapRef = ref(null)
+
+const languageOptions = [
+  { value: 'es', label: 'Español', flag: 'https://flagcdn.com/h20/es.png' },
+  { value: 'en', label: 'English', flag: 'https://flagcdn.com/h20/us.png' }
+]
+
+const currentLang = computed(() => languageOptions.find(o => o.value === lang.value) || languageOptions[0])
+
+const texts = {
+  es: {
+    language: 'Idioma',
+    redirect_title: 'Te estamos llevando a',
+    redirect_subtitle: 'Iniciando tu experiencia...',
+    choose_nearest: 'ELIGE TU SALCHIMONSTER MÁS CERCANO',
+    type_address: 'Escribe tu dirección...',
+    neighborhood_sector: 'Barrio / Sector',
+    loading_neighborhoods: 'Cargando barrios...',
+    type_to_search: 'Escribe para buscar...',
+    no_neighborhoods: 'No hay barrios',
+    exact_address: 'Dirección exacta',
+    exact_address_ph: 'Ej: Calle 123 # 45 - 67...',
+    search_result: 'Resultado de búsqueda',
+    address: 'Dirección:',
+    nearest_store: 'Sede más cercana:',
+    assigned_store: 'Sede asignada:',
+    delivery_cost: 'Costo envío:',
+    in_coverage: '✅ Cubrimos tu zona',
+    out_of_coverage: '❌ Fuera de zona de entrega',
+    delivery: 'Domicilio',
+    your_zone_by_neighborhood: 'Tu zona (Por Barrios)',
+    ready_to_send: '✅ Listo para enviar',
+    store_photo_alt: 'Foto sede',
+    open: 'Abierto',
+    closed: 'Cerrado',
+    how_want_order: '¿Cómo quieres tu pedido?',
+    store_label: 'Sede:',
+    back: 'Volver',
+    where_are_you: '¿Dónde estás?',
+    modal_address_ph: 'Calle 123 # 45 - 67...',
+    delivery_details: 'Datos de Entrega',
+    search_your_neighborhood: 'Busca tu Barrio',
+    neighborhood: 'Barrio:',
+    exact_address_modal: 'Dirección Exacta',
+    exact_address_modal_ph: 'Ej: Calle 123 # 45 - 67 Apt 201',
+    confirm_delivery: 'Confirmar Domicilio',
+    validating_coverage: 'Validando cobertura...',
+    coverage_summary: 'Resumen de Cobertura',
+    confirm_and_go: 'Confirmar e Ir',
+    na: 'N/A',
+
+    // Mensajes/errores
+    delivery_not_available_store: 'El servicio de domicilio no está disponible en esta sede.',
+    error_validating_address: 'Error validando dirección.',
+    nb_assigned_no_delivery: 'La sede asignada a este barrio no tiene servicio de domicilio activo.',
+    could_not_determine_order_type: 'Error: No se pudo determinar el tipo de orden para domicilio.',
+    transfer_error: 'Error al transferir. Intenta de nuevo.',
+    this_store_no_delivery: 'Esta sede no tiene habilitado domicilio.'
+  },
+  en: {
+    language: 'Language',
+    redirect_title: 'Taking you to',
+    redirect_subtitle: 'Starting your experience...',
+    choose_nearest: 'CHOOSE YOUR NEAREST SALCHIMONSTER',
+    type_address: 'Type your address...',
+    neighborhood_sector: 'Neighborhood / Area',
+    loading_neighborhoods: 'Loading neighborhoods...',
+    type_to_search: 'Type to search...',
+    no_neighborhoods: 'No neighborhoods available',
+    exact_address: 'Exact address',
+    exact_address_ph: 'E.g. 123 Main St...',
+    search_result: 'Search result',
+    address: 'Address:',
+    nearest_store: 'Nearest store:',
+    assigned_store: 'Assigned store:',
+    delivery_cost: 'Delivery fee:',
+    in_coverage: '✅ We deliver to your area',
+    out_of_coverage: '❌ Out of delivery area',
+    delivery: 'Delivery',
+    your_zone_by_neighborhood: 'Your area (By neighborhood)',
+    ready_to_send: '✅ Ready to deliver',
+    store_photo_alt: 'Store photo',
+    open: 'Open',
+    closed: 'Closed',
+    how_want_order: 'How would you like your order?',
+    store_label: 'Store:',
+    back: 'Back',
+    where_are_you: 'Where are you?',
+    modal_address_ph: '123 Main St...',
+    delivery_details: 'Delivery details',
+    search_your_neighborhood: 'Find your neighborhood',
+    neighborhood: 'Neighborhood:',
+    exact_address_modal: 'Exact address',
+    exact_address_modal_ph: 'E.g. 123 Main St Apt 201',
+    confirm_delivery: 'Confirm delivery',
+    validating_coverage: 'Validating coverage...',
+    coverage_summary: 'Coverage summary',
+    confirm_and_go: 'Confirm and go',
+    na: 'N/A',
+
+    // Messages/errors
+    delivery_not_available_store: 'Delivery is not available at this store.',
+    error_validating_address: 'Error validating address.',
+    nb_assigned_no_delivery: 'The store assigned to this neighborhood does not have delivery enabled.',
+    could_not_determine_order_type: 'Error: Could not determine delivery order type.',
+    transfer_error: 'Transfer failed. Please try again.',
+    this_store_no_delivery: 'This store does not have delivery enabled.'
+  }
+}
+
+function t(key) {
+  return (texts[lang.value] && texts[lang.value][key]) ? texts[lang.value][key] : key
+}
+
+function toggleLangMenu() {
+  langMenuOpen.value = !langMenuOpen.value
+}
+function selectLang(v) {
+  lang.value = v
+  langMenuOpen.value = false
+}
+
+function onOutsideClick(e) {
+  const el = langWrapRef.value
+  if (!el) return
+  if (!el.contains(e.target)) langMenuOpen.value = false
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    const saved = window.localStorage.getItem(LANG_KEY)
+    if (saved === 'es' || saved === 'en') lang.value = saved
+    window.addEventListener('click', onOutsideClick, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('click', onOutsideClick, true)
+  }
+})
+
+watch(lang, (v) => {
+  if (typeof window !== 'undefined') window.localStorage.setItem(LANG_KEY, v)
+})
+
+/* Si en tu backend los order_types vienen en ES, este helper traduce los “clásicos” en modal */
+function tOrderTypeName(ot) {
+  const id = Number(ot?.id)
+  if (id === 3) return t('delivery')
+  if (id === 2) return 'Pickup'
+  if (id === 6) return 'Dine-in'
+  return ot?.name || ''
+}
 
 /* =======================
    CONFIG & STATE
@@ -457,6 +625,8 @@ const BACKEND_BASE = 'https://backend.salchimonster.com'
 const LOCATIONS_BASE = 'https://api.locations.salchimonster.com'
 const URI = 'https://backend.salchimonster.com'
 const MAIN_DOMAIN = 'salchimonster.com'
+
+const FIXED_CITY_ID = 15 // ✅ CIUDAD FIJA
 
 const map = ref(null)
 const leafletModule = ref(null)
@@ -469,7 +639,8 @@ const cities = ref([])
 const sitePaymentsConfig = ref([])
 const cityMapStatus = ref([])
 
-const selectedCityId = ref(0)
+/* ✅ ciudad fija: 15 */
+const selectedCityId = ref(FIXED_CITY_ID)
 const selectedStoreId = ref(null)
 
 const sessionToken = ref((typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -484,22 +655,15 @@ const targetSiteName = ref('')
    ✅ App-like: bloquear scroll global + zoom del navegador
    ======================= */
 const preventGesture = (e) => { try { e.preventDefault() } catch {} }
-const preventCtrlWheelZoom = (e) => {
-  // Desktop: Ctrl + wheel => zoom del navegador
-  if (e.ctrlKey) {
-    try { e.preventDefault() } catch {}
-  }
-}
+const preventCtrlWheelZoom = (e) => { if (e.ctrlKey) { try { e.preventDefault() } catch {} } }
 
 function lockPage() {
   if (typeof window === 'undefined') return
   document.documentElement.classList.add('no-global-scroll')
   document.body.classList.add('no-global-scroll')
-  // iOS Safari (pinch)
   window.addEventListener('gesturestart', preventGesture, { passive: false })
   window.addEventListener('gesturechange', preventGesture, { passive: false })
   window.addEventListener('gestureend', preventGesture, { passive: false })
-  // Desktop browser zoom
   window.addEventListener('wheel', preventCtrlWheelZoom, { passive: false })
 }
 
@@ -526,7 +690,6 @@ function updateIsMobile() {
 
 onMounted(() => {
   lockPage()
-
   if (typeof window === 'undefined') return
   mq = window.matchMedia('(max-width: 900px)')
   updateIsMobile()
@@ -536,26 +699,16 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unlockPage()
-
   if (!mq) return
   if (mq.removeEventListener) mq.removeEventListener('change', updateIsMobile)
   else mq.removeListener(updateIsMobile)
 })
 
 /* =======================
-   CITY OPTIONS (con “Todas”)
+   CITY (fija)
    ======================= */
-const orderedCities = computed(() => {
-  return [...cities.value.filter((s) => ![18, 15, 19].includes(Number(s.city_id)))]
-    .sort((a, b) => (Number(a.index ?? 0) - Number(b.index ?? 0)))
-})
-
-const citySelectOptions = computed(() => {
-  return [{ city_id: 0, city_name: 'Todas las ciudades' }, ...orderedCities.value]
-})
-
 const selectedCityObj = computed(() => {
-  return cities.value.find((c) => Number(c.city_id) === Number(selectedCityId.value)) || null
+  return cities.value.find((c) => Number(c.city_id) === Number(FIXED_CITY_ID)) || null
 })
 
 /* =======================
@@ -585,18 +738,17 @@ async function onAddressComplete(e) {
   try {
     const params = new URLSearchParams({
       input: q,
-      language: 'es',
+      language: lang.value === 'en' ? 'en' : 'es',
       countries: 'co',
       limit: '5',
       session_token: sessionToken.value
     })
 
-    if (Number(selectedCityId.value)) {
-      const c = cities.value.find((x) => Number(x.city_id) === Number(selectedCityId.value))
-      if (c) params.append('city', c.city_name)
-    }
+    // ✅ ciudad fija: agrega el nombre si existe
+    const c = cities.value.find((x) => Number(x.city_id) === Number(FIXED_CITY_ID))
+    if (c) params.append('city', c.city_name)
 
-    const res = await fetch(`${LOCATIONS_BASE}/co/places/autocomplete?${params}`)
+    const res = await fetch(`${LOCATIONS_BASE}/places/autocomplete?${params}`)
     const data = await res.json()
     suggestions.value = normalizePredictions(data.predictions)
   } catch {
@@ -615,7 +767,7 @@ function onSelectSuggestionEvent(ev) {
 async function fetchCoverageDetails(placeId) {
   try {
     const res = await fetch(
-      `${LOCATIONS_BASE}/co/places/coverage-details?place_id=${placeId}&session_token=${sessionToken.value}&language=es`
+      `${LOCATIONS_BASE}/places/coverage-details?place_id=${placeId}&session_token=${sessionToken.value}&language=${lang.value === 'en' ? 'en' : 'es'}`
     )
     const data = await res.json()
     coverageResult.value = data
@@ -686,13 +838,11 @@ const isModalOpen = ref(false)
 const modalStore = ref(null)
 const modalStep = ref(1)
 
-// Google Modal
 const modalAddressQuery = ref('')
 const modalSuggestions = ref([])
 const modalCoverageResult = ref(null)
 const modalAddressError = ref('')
 
-// Barrios Modal
 const modalSelectedNeighborhood = ref(null)
 const modalNbSuggestions = ref([])
 const modalParamAddress = ref('')
@@ -708,7 +858,7 @@ function isGoogleMapsEnabled(cityId) {
 const isGoogleCity = computed(() => {
   const cityId = modalStore.value
     ? (modalStore.value.cityId || modalStore.value.city_id)
-    : selectedCityId.value
+    : FIXED_CITY_ID
   return !!Number(cityId) && isGoogleMapsEnabled(Number(cityId))
 })
 const isParamsCity = computed(() => !isGoogleCity.value)
@@ -723,7 +873,6 @@ const shouldCollapseMap = computed(() => {
   return sidebarHasResult || modalIsOpen
 })
 
-/* ✅ cuando el mapa vuelve a aparecer, Leaflet necesita invalidateSize */
 watch(shouldCollapseMap, async (collapsed) => {
   if (!collapsed) {
     await nextTick()
@@ -745,7 +894,6 @@ async function openModal(store) {
   modalStep.value = 1
   isModalOpen.value = true
 
-  // reset
   modalAddressQuery.value = ''
   modalSuggestions.value = []
   modalCoverageResult.value = null
@@ -757,7 +905,7 @@ async function openModal(store) {
 
   const cityId = store.cityId || store.city_id
   if (cityId && !isGoogleMapsEnabled(cityId)) {
-    if (neighborhoods.value.length === 0 || Number(selectedCityId.value) !== Number(cityId)) {
+    if (neighborhoods.value.length === 0) {
       await loadNeighborhoodsByCity(cityId)
     }
   }
@@ -799,13 +947,13 @@ async function onModalAddressComplete(e) {
   try {
     const params = new URLSearchParams()
     params.append('input', q)
-    params.append('language', 'es')
+    params.append('language', lang.value === 'en' ? 'en' : 'es')
     params.append('countries', 'co')
     params.append('limit', '4')
     params.append('session_token', sessionToken.value)
     if (modalStore.value?.city) params.append('city', modalStore.value.city)
 
-    const res = await fetch(`${LOCATIONS_BASE}/co/places/autocomplete?${params}`)
+    const res = await fetch(`${LOCATIONS_BASE}/places/autocomplete?${params}`)
     const data = await res.json()
     modalSuggestions.value = normalizePredictions(data.predictions)
   } catch {
@@ -827,9 +975,9 @@ async function onSelectModalSuggestion(s) {
     const params = new URLSearchParams({
       place_id: s.place_id,
       session_token: sessionToken.value,
-      language: 'es'
+      language: lang.value === 'en' ? 'en' : 'es'
     })
-    const res = await fetch(`${LOCATIONS_BASE}/co/places/coverage-details?${params}`)
+    const res = await fetch(`${LOCATIONS_BASE}/places/coverage-details?${params}`)
     const data = await res.json()
 
     modalCoverageResult.value = data
@@ -838,11 +986,11 @@ async function onSelectModalSuggestion(s) {
     if (ot) {
       modalStep.value = 4
     } else {
-      modalAddressError.value = 'El servicio de domicilio no está disponible en esta sede.'
+      modalAddressError.value = t('delivery_not_available_store')
       modalStep.value = 2
     }
   } catch {
-    modalAddressError.value = 'Error validando dirección.'
+    modalAddressError.value = t('error_validating_address')
     modalStep.value = 2
   }
 }
@@ -864,13 +1012,13 @@ function onDispatchModalParams() {
 
   const ot = getExactOrderType(targetStore.id, 3)
   if (!ot) {
-    alert('La sede asignada a este barrio no tiene servicio de domicilio activo.')
+    alert(t('nb_assigned_no_delivery'))
     return
   }
 
   dispatchToSite(targetStore, ot, {
     mode: 'params',
-    city: cities.value.find((c) => Number(c.city_id) === Number(targetStore.cityId)),
+    city: selectedCityObj.value,
     neighborhood: modalSelectedNeighborhood.value,
     exactAddress: modalParamAddress.value
   })
@@ -891,7 +1039,7 @@ function confirmGoogleDispatch() {
       city: selectedCityObj.value
     })
   } else {
-    alert('Error: No se pudo determinar el tipo de orden para domicilio.')
+    alert(t('could_not_determine_order_type'))
   }
 }
 
@@ -925,15 +1073,20 @@ async function loadStores() {
     const res = await fetch(`${BACKEND_BASE}/sites`)
     const data = await res.json()
     stores.value = data
-      .filter((s) => s.show_on_web && s.time_zone === 'America/Bogota' && s.site_id != 32)
+      .filter((s) =>
+        s.show_on_web &&
+        s.time_zone === 'America/New_York' &&
+        s.site_id != 32 &&
+        Number(s.city_id) === Number(FIXED_CITY_ID) // ✅ SOLO CIUDAD 15
+      )
       .map((s) => ({
         id: s.site_id,
         name: `SALCHIMONSTER ${s.site_name}`,
         city: s.city_name,
         cityId: s.city_id,
-        address: s.site_address || 'Dirección pendiente',
-        lat: s.location?.[0] || 4.0,
-        lng: s.location?.[1] || -74.0,
+        address: s.site_address || (lang.value === 'en' ? 'Address pending' : 'Dirección pendiente'),
+        lat: s.location?.[0] || 40.7128,
+        lng: s.location?.[1] || -74.0060,
         subdomain: s.subdomain,
         img_id: s.img_id,
         status: 'unknown'
@@ -1099,7 +1252,7 @@ async function dispatchToSite(manualStore, orderTypeObj, extra = { mode: 'simple
   } catch (error) {
     console.error(error)
     isRedirecting.value = false
-    alert('Error al transferir. Intenta de nuevo.')
+    alert(t('transfer_error'))
   }
 }
 
@@ -1111,7 +1264,7 @@ function onDispatchParamsDelivery() {
   const store = paramAssignedStore.value
   if (!store) return
   const ot = getExactOrderType(store.id, 3)
-  if (!ot) { alert('Esta sede no tiene habilitado domicilio.'); return }
+  if (!ot) { alert(t('this_store_no_delivery')); return }
 
   dispatchToSite(store, ot, {
     mode: 'params',
@@ -1134,7 +1287,7 @@ const loadHighResImage = (store) => {
 const onImgError = (store) => { imgCache.value[store.id] = `${BACKEND_BASE}/read-product-image/96/site-${store.id}` }
 
 /* =======================
-   UTILS + DATA
+   UTILS
    ======================= */
 function getStoreById(id) { return stores.value.find(s => Number(s.id) === Number(id)) }
 function formatCOP(v) {
@@ -1148,8 +1301,6 @@ function formatCOP(v) {
    ======================= */
 const filteredStores = computed(() => {
   let base = stores.value
-  const cityId = Number(selectedCityId.value || 0)
-  if (cityId) base = base.filter((s) => Number(s.cityId) === cityId)
 
   if (mapBounds.value) {
     base = base.filter((s) =>
@@ -1169,76 +1320,33 @@ function updateBounds() {
   }
 }
 
-async function onCityChange() {
-  // ✅ asegurar número (PrimeVue a veces retorna string)
-  selectedCityId.value = Number(selectedCityId.value || 0)
-
-  // ✅ al cambiar ciudad: reseteo resultados => el mapa vuelve a aparecer en móvil con animación
-  coverageResult.value = null
-  addressQuery.value = ''
-  suggestions.value = []
-
-  neighborhoods.value = []
-  selectedNeighborhood.value = null
-  nbSuggestions.value = []
-  if (!selectedCityId.value) paramExactAddress.value = ''
-
-  // marker gmaps reset
-  try {
-    if (dropoffMarker.value && map.value) {
-      map.value.removeLayer(dropoffMarker.value)
-      dropoffMarker.value = null
-    }
-  } catch {}
-
-  if (selectedCityId.value && !isGoogleMapsEnabled(selectedCityId.value)) {
-    await loadNeighborhoodsByCity(selectedCityId.value)
-  }
-
-  if (!map.value || !leafletModule.value) return
-  const L = leafletModule.value
-  const cityIdAtClick = selectedCityId.value
-
-  if (!initialBounds.value) initialBounds.value = map.value.getBounds()
-
-  if (!cityIdAtClick) {
-    map.value.flyToBounds(initialBounds.value, { padding: [40, 40], animate: true, duration: 0.9 })
-    return
-  }
-
-  const cityStores = stores.value.filter((s) => Number(s.cityId) === Number(cityIdAtClick))
-  const latlngs = cityStores.map((s) => [s.lat, s.lng])
-  if (!latlngs.length) return
-
-  const targetBounds = L.latLngBounds(latlngs)
-
-  // ✅ "doble animación"
-  map.value.flyToBounds(initialBounds.value, { padding: [40, 40], animate: true, duration: 0.7 })
-  setTimeout(() => {
-    if (!map.value || Number(selectedCityId.value) !== Number(cityIdAtClick)) return
-    map.value.flyToBounds(targetBounds, { padding: [40, 40], animate: true, duration: 0.9 })
-  }, 750)
-}
-
 onMounted(async () => {
   await Promise.all([loadPaymentConfig(), loadCityMapStatus()])
   await Promise.all([loadCities(), loadStores()])
   await loadStatuses()
 
+  // ✅ si esta ciudad NO usa Google Maps, precargar barrios una sola vez
+  if (!isGoogleMapsEnabled(FIXED_CITY_ID)) {
+    await loadNeighborhoodsByCity(FIXED_CITY_ID)
+  }
+
   const mod = await import('leaflet')
   const L = mod.default ?? mod
   leafletModule.value = L
 
-  const colombiaBounds = L.latLngBounds(L.latLng(-4.5, -79.5), L.latLng(13.5, -66.5))
+  const nycBounds = L.latLngBounds(
+    L.latLng(39.85, -75.30),
+    L.latLng(40.95, -73.70)
+  )
+
   map.value = L.map('vicio-map', {
-    zoom: 6,
-    minZoom: 5,
+    center: [40.7128, -74.0060],
+    zoom: 12,
+    minZoom: 2,
     maxZoom: 16,
-    maxBounds: colombiaBounds,
+    maxBounds: nycBounds,
     maxBoundsViscosity: 1.0,
     zoomControl: false,
-
-    // ✅ Sin gestos / zoom / scroll en el mapa (app-like)
     scrollWheelZoom: false,
     doubleClickZoom: false,
     touchZoom: false,
@@ -1276,8 +1384,8 @@ onMounted(async () => {
     map.value.setMinZoom(map.value.getBoundsZoom(group.getBounds()))
     initialBounds.value = group.getBounds()
   } else {
-    initialBounds.value = colombiaBounds
-    map.value.fitBounds(colombiaBounds, { padding: [40, 40] })
+    initialBounds.value = nycBounds
+    map.value.fitBounds(nycBounds, { padding: [40, 40] })
   }
 
   map.value.on('moveend', updateBounds)
@@ -1286,6 +1394,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* (Tu CSS original tal cual, sin cambios) */
 /* =========================
    ✅ GLOBAL: sin scroll global (app-like)
    ========================= */
@@ -1296,34 +1405,22 @@ onMounted(async () => {
   overscroll-behavior: none;
 }
 
-:global(body.no-global-scroll) {
-  margin: 0;
-}
+:global(body.no-global-scroll) { margin: 0; }
+:global(html.no-global-scroll) { -webkit-text-size-adjust: 100%; }
 
-/* Evita “bounce” raro en iOS */
-:global(html.no-global-scroll) {
-  -webkit-text-size-adjust: 100%;
-}
-
-/* =========================
-   Layout base (App Shell)
-   ========================= */
 .vicio-root { width: 100%; height: 100%; }
 .vicio-page {
   display: flex;
   width: 100%;
-  height: 100dvh;           /* ✅ mejor que 100vh en móvil */
+  height: 100dvh;
   max-height: 100dvh;
-  overflow: hidden;         /* ✅ no scroll global */
+  overflow: hidden;
   background: var(--bg-page);
   color: var(--text-primary);
   font-family: 'Roboto', sans-serif;
-
-  /* ✅ evita gestos globales; el scroll vive SOLO en .stores-list */
   touch-action: none;
 }
 
-/* ✅ mapa se queda fijo dentro del layout, sin scroll */
 .vicio-map-shell {
   flex: 1 1 55%;
   height: 100%;
@@ -1335,10 +1432,9 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   background: #e2e8f0;
-  touch-action: none; /* ✅ sin pinch/drag en el mapa */
+  touch-action: none;
 }
 
-/* Sidebar sin scroll global, SOLO lista */
 .vicio-sidebar {
   flex: 1 1 45%;
   display: flex;
@@ -1347,7 +1443,7 @@ onMounted(async () => {
   border-left: 1px solid var(--border-subtle);
   box-shadow: -5px 0 25px rgba(0, 0, 0, 0.05);
   height: 100%;
-  overflow: hidden; /* ✅ */
+  overflow: hidden;
 }
 
 .sidebar-header {
@@ -1358,20 +1454,30 @@ onMounted(async () => {
   position: relative;
   z-index: 5;
 }
+
+/* ✅ NUEVO: fila superior con selector de idioma */
+.sidebar-top-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: .75rem;
+  margin-bottom: .9rem;
+}
+
 .sidebar-title {
   font-size: 0.82rem;
   letter-spacing: 0.18em;
   font-weight: 800;
-  margin: 0 0 0.9rem;
+  margin: 0;
   text-transform: uppercase;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  flex: 1;
 }
 .sidebar-title::before { content: "🔥"; font-size: 1rem; }
 
-.city-select-wrapper { margin-bottom: 0.9rem; }
 .city-label {
   display: block;
   font-size: 0.7rem;
@@ -1451,15 +1557,14 @@ onMounted(async () => {
 .btn-delivery:hover { background-color: #e65c00; }
 .full-width { width: 100%; }
 
-/* ✅ SOLO aquí hay scroll */
 .stores-list {
   flex: 1;
   overflow-y: auto;
   background: #ffffff;
   padding: 0.45rem 0 1.2rem;
-  overscroll-behavior: contain;         /* ✅ no rebote hacia “body” */
-  -webkit-overflow-scrolling: touch;    /* ✅ suave iOS */
-  touch-action: pan-y;                  /* ✅ permitir scroll vertical */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .store-item {
@@ -1581,7 +1686,51 @@ onMounted(async () => {
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
-/* ✅ Mobile behavior + animación de colapso */
+/* ✅ NUEVO: estilos selector de idioma */
+.lang-wrap { position: relative; flex-shrink: 0; }
+.lang-btn{
+  display:flex;
+  align-items:center;
+  gap:.45rem;
+  padding:.35rem .55rem;
+  border-radius: .6rem;
+  border: 1px solid #e2e8f0;
+  background:#ffffff;
+  cursor:pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.lang-btn:hover{ background:#f8fafc; }
+.lang-flag{ width:18px; height:18px; border-radius: 999px; object-fit: cover; }
+.lang-label{ font-size:.78rem; font-weight:800; color:#0f172a; }
+.lang-chevron{ color:#64748b; }
+.lang-menu{
+  position:absolute;
+  right:0;
+  top: calc(100% + 8px);
+  background:#ffffff;
+  border:1px solid #e2e8f0;
+  border-radius:.75rem;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+  overflow:hidden;
+  min-width: 160px;
+  z-index: 50;
+}
+.lang-option{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.6rem;
+  padding:.6rem .75rem;
+  border:none;
+  background:transparent;
+  cursor:pointer;
+  font-weight:800;
+  color:#0f172a;
+}
+.lang-option:hover{ background:#f8fafc; }
+.lang-check{ color:#16a34a; }
+
 @media (max-width: 900px) {
   .vicio-page { flex-direction: column; }
 
