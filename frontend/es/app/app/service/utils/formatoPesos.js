@@ -5,8 +5,8 @@ function formatoPesosColombianos(numero) {
   return new Intl.NumberFormat('es-co', {
     style: 'currency',
     currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(numero)
 }
 

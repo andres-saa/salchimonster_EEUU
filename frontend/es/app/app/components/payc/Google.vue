@@ -579,7 +579,7 @@ const formatCOP = (v) =>
     : new Intl.NumberFormat(lang.value === 'en' ? 'en-CO' : 'es-CO', {
         style: 'currency',
         currency: 'COP',
-        maximumFractionDigits: 0
+        maximumFractionDigits:2
       }).format(v)
 
 /* ================= Modal Google ================= */
