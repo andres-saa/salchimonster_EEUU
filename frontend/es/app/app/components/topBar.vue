@@ -149,9 +149,9 @@ const menusAll = computed(() => {
     { label: t.carta || 'Carta', to: `/carta` },
     { label: t.rastrear || 'Rastrear', to: `/rastrear` },
     { label: t.ayuda || 'Ayuda', to: `/pqr` },
-      { label: t.franquicias || 'Franquicias', to: `/franquicias` },
-    { label: t.colaboraciones || 'Colaboraciones', to: `/colaboraciones` },
-    { label: t.sonando || 'Sonando', to: `/sonando` }
+    //   { label: t.franquicias || 'Franquicias', to: `/franquicias` },
+    // { label: t.colaboraciones || 'Colaboraciones', to: `/colaboraciones` },
+    // { label: t.sonando || 'Sonando', to: `/sonando` }
   ]
 
   const menusLogueados = [

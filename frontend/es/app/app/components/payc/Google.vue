@@ -264,7 +264,7 @@
                 class="form-group mt-3"
               >
                 <label>{{ t('vehicle_plate') }}</label>
-                <input type="text" class="input-modern" v-model="user.user.placa" :placeholder="t('plate_placeholder')" />
+                <InputText type="text" class="input-modern" v-model="user.user.placa" :placeholder="t('plate_placeholder')" />
               </div>
             </div>
           </section>

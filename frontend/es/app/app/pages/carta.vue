@@ -51,7 +51,7 @@
       </Transition>
     </Teleport>
 
-    <a
+    <!-- <a
       href="https://local.bot.salchimonster.com/ubicacion/1"
       class="promo-fab"
       :class="{ 'is-hidden': isScrolling }"
@@ -60,7 +60,7 @@
       <div class="fab-content">
         <img class="fab-icon" :src="`${URI}/read-photo-product/5Dqs9XtT`" alt="Promos">
       </div>
-    </a>
+    </a> -->
 
   </div>
 </template>
@@ -105,7 +105,7 @@ const normalize = (s) => String(s || '').toLowerCase().normalize('NFD').replace(
 // --- LÓGICA ESPAÑA ---
 const activeMenu = computed(() => {
   if (!menuData.value.length) return null
-  return menuData.value.find(m => m.id === 'es-general' || normalize(m.name).includes('colombia')) || null
+  return menuData.value.find(m => m.id === 'nj-general' || normalize(m.name).includes('New Jersey')) || null
 })
 
 const activeCards = computed(() => {

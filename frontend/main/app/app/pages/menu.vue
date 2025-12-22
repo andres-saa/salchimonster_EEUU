@@ -54,7 +54,7 @@
         </div>
       </Transition>
     </Teleport>
-
+<!-- 
     <a
       href="https://local.bot.salchimonster.com/ubicacion/1"
       class="promo-fab"
@@ -69,7 +69,7 @@
           alt="Promos"
         >
       </div>
-    </a>
+    </a> -->
 
   </div>
 </template>
@@ -129,7 +129,7 @@ const normalize = (s) => String(s || '').toLowerCase().normalize('NFD').replace(
 const activeMenu = computed(() => {
   if (!menuData.value.length) return null
   // Busca ID "colombia" o nombre "Colombia"
-  return menuData.value.find(m => m.id === 'es-general' || normalize(m.name).includes('España')) || null
+  return menuData.value.find(m => m.id === 'nj-general' || normalize(m.name).includes('New Jersey')) || null
 })
 
 // Variable reactiva para controlar estilos según la orientación elegida
