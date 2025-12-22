@@ -291,7 +291,8 @@ export const usecartStore = defineStore('salchi_supegwseasr_cart_web443', {
           : [],
 
         pedido_nombre_producto: product.productogeneral_descripcion,
-
+        english_name:product.english_name,
+        english_description:product.english_description,
         modificadorseleccionList: additionalItems.map((add) => ({
           modificador_id: add.modificador_id,
           modificadorseleccion_id: add.modificadorseleccion_id,

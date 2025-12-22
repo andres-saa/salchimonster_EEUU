@@ -1,13 +1,11 @@
 <template>
   <div class="cart-wrapper">
-    
     <div class="header-section" v-if="store.cart.length > 0">
-      <h1 class="page-title">Tu carrito</h1>
-      <p class="subtitle">{{ store.cart.length }} items agregados</p>
+      <h1 class="page-title">{{ t('cart_title') }}</h1>
+      <p class="subtitle">{{ store.cart.length }} {{ t('items_added') }}</p>
     </div>
 
     <div class="cart-container" v-if="store.cart.length > 0">
-      
       <div class="cart-items-column">
         <TransitionGroup name="list">
           <div
@@ -16,12 +14,11 @@
             :key="product.pedido_productoid || product.signature"
           >
             <div class="product-main-content">
-              
               <div class="product-image-wrapper">
                 <img
                   class="product-img"
                   :src="`https://img.restpe.com/${product.productogeneral_urlimagen}`"
-                  :alt="product.pedido_nombre_producto"
+                  :alt="productDisplayName(product)"
                   loading="lazy"
                 />
               </div>
@@ -29,13 +26,14 @@
               <div class="product-details">
                 <div class="product-header">
                   <h3 class="product-name">
-                    {{ formatName(product.pedido_nombre_producto) }}
+                    {{ formatName(productDisplayName(product)) }}
                   </h3>
-                  
+
                   <button
                     class="btn-delete desktop-only"
                     @click="store.removeProductFromCart(product.signature)"
-                    title="Eliminar producto"
+                    :title="t('remove_product')"
+                    type="button"
                   >
                     <Icon name="mdi:trash-can-outline" />
                   </button>
@@ -43,30 +41,35 @@
 
                 <div class="product-actions">
                   <div class="qty-control">
-                    <button 
-                      class="qty-btn" 
+                    <button
+                      class="qty-btn"
                       @click="store.decrementProduct(product.signature)"
+                      type="button"
+                      :aria-label="t('decrease_qty')"
                     >
                       <Icon name="mdi:minus" size="14" />
                     </button>
                     <span class="qty-display">{{ product.pedido_cantidad }}</span>
-                    <button 
-                      class="qty-btn" 
+                    <button
+                      class="qty-btn"
                       @click="store.incrementProduct(product.signature)"
+                      type="button"
+                      :aria-label="t('increase_qty')"
                     >
                       <Icon name="mdi:plus" size="14" />
                     </button>
                   </div>
 
                   <div class="price-display">
-                    <span 
-                      v-if="product.pedido_descuento > 0" 
-                      class="price-old"
-                    >
+                    <span v-if="product.pedido_descuento > 0" class="price-old">
                       {{ formatoPesosColombianos(product.pedido_precio * product.pedido_cantidad) }}
                     </span>
                     <span class="price-final">
-                      {{ formatoPesosColombianos((product.pedido_precio - product.pedido_descuento) * product.pedido_cantidad) }}
+                      {{
+                        formatoPesosColombianos(
+                          (product.pedido_precio - product.pedido_descuento) * product.pedido_cantidad
+                        )
+                      }}
                     </span>
                   </div>
                 </div>
@@ -75,17 +78,16 @@
               <button
                 class="btn-delete mobile-only"
                 @click="store.removeProductFromCart(product.signature)"
+                type="button"
+                :aria-label="t('remove')"
               >
                 <Icon name="mdi:close" />
               </button>
             </div>
 
-            <div
-              v-if="product.modificadorseleccionList?.length > 0"
-              class="additions-section"
-            >
+            <div v-if="product.modificadorseleccionList?.length > 0" class="additions-section">
               <div class="additions-header">
-                <span>Adicionales y cambios</span>
+                <span>{{ t('additions_and_changes') }}</span>
               </div>
 
               <div
@@ -102,22 +104,30 @@
 
                 <div class="addition-actions">
                   <span v-if="item.pedido_precio > 0" class="addition-price">
-                    + {{ formatoPesosColombianos(item.pedido_precio * item.modificadorseleccion_cantidad * product.pedido_cantidad) }}
+                    + {{
+                      formatoPesosColombianos(
+                        item.pedido_precio * item.modificadorseleccion_cantidad * product.pedido_cantidad
+                      )
+                    }}
                   </span>
-                  
+
                   <div class="qty-control small">
-                    <button 
-                      class="qty-btn" 
+                    <button
+                      class="qty-btn"
                       @click="store.decrementAdditional(product.signature, item)"
+                      type="button"
+                      :aria-label="t('decrease_additional')"
                     >
                       <Icon name="mdi:minus" size="10" />
                     </button>
                     <span class="qty-display">
                       {{ item.modificadorseleccion_cantidad * product.pedido_cantidad }}
                     </span>
-                    <button 
-                      class="qty-btn" 
+                    <button
+                      class="qty-btn"
                       @click="store.incrementAdditional(product.signature, item)"
+                      type="button"
+                      :aria-label="t('increase_additional')"
                     >
                       <Icon name="mdi:plus" size="10" />
                     </button>
@@ -140,24 +150,61 @@
       <div class="empty-icon-bg">
         <Icon name="mdi:cart-outline" class="empty-icon" />
       </div>
-      <h2 class="empty-title">Tu carrito está vacío</h2>
-      <p class="empty-text">¡Antójate de algo delicioso y agrégalo aquí!</p>
+      <h2 class="empty-title">{{ t('empty_title') }}</h2>
+      <p class="empty-text">{{ t('empty_text') }}</p>
       <NuxtLink to="/" class="btn-primary">
-        Ir al menú
+        {{ t('go_to_menu') }}
       </NuxtLink>
     </div>
-
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onBeforeMount } from 'vue'
+import { computed, onMounted, watch, onBeforeMount } from 'vue'
 import { usecartStore, useSitesStore, useUserStore } from '#imports'
 import { formatoPesosColombianos } from '@/service/utils/formatoPesos'
 
 const store = usecartStore()
 const siteStore = useSitesStore()
 const user = useUserStore()
+
+/* ================= i18n ================= */
+const lang = computed(() =>
+  (user?.lang?.name || 'es').toString().toLowerCase() === 'en' ? 'en' : 'es'
+)
+
+const DICT = {
+  es: {
+    cart_title: 'Tu carrito',
+    items_added: 'items agregados',
+    remove_product: 'Eliminar producto',
+    remove: 'Eliminar',
+    decrease_qty: 'Disminuir cantidad',
+    increase_qty: 'Aumentar cantidad',
+    additions_and_changes: 'Adicionales y cambios',
+    decrease_additional: 'Disminuir adicional',
+    increase_additional: 'Aumentar adicional',
+    empty_title: 'Tu carrito está vacío',
+    empty_text: '¡Antójate de algo delicioso y agrégalo aquí!',
+    go_to_menu: 'Ir al menú'
+  },
+  en: {
+    cart_title: 'Your cart',
+    items_added: 'items added',
+    remove_product: 'Remove product',
+    remove: 'Remove',
+    decrease_qty: 'Decrease quantity',
+    increase_qty: 'Increase quantity',
+    additions_and_changes: 'Add-ons & changes',
+    decrease_additional: 'Decrease add-on',
+    increase_additional: 'Increase add-on',
+    empty_title: 'Your cart is empty',
+    empty_text: 'Crave something tasty and add it here!',
+    go_to_menu: 'Go to menu'
+  }
+}
+
+const t = (key) => DICT[lang.value]?.[key] || DICT.es[key] || key
 
 // --- FUNCIÓN HELPER PARA TEXTO (Sentence case) ---
 const formatName = (str) => {
@@ -184,13 +231,21 @@ onMounted(async () => {
     siteStore.setNeighborhoodPriceCero()
   }
 })
+
+const productDisplayName = (product) => {
+  if (!product) return ''
+  const esName = product.pedido_nombre_producto || ''
+  const enName = product.english_name || ''
+  return lang.value === 'en' ? (enName || esName) : esName
+}
+
 </script>
 
 <style scoped>
-/* --- VARIABLES --- */
+/* (tu <style> queda igual, no lo toco) */
 .cart-wrapper {
   --primary: #000000;
-  --bg-page: #f9fafb; /* Fondo gris muy suave para la página */
+  --bg-page: #f9fafb;
   --bg-card: #ffffff;
   --text-main: #1f2937;
   --text-muted: #6b7280;
@@ -199,38 +254,24 @@ onMounted(async () => {
   --danger-bg: #fef2f2;
   --radius: 12px;
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  
+
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
   min-height: 80vh;
 }
 
-/* --- HEADER --- */
-.header-section {
-  text-align: center;
-  margin-bottom: 2.5rem;
-}
-.page-title {
-  font-size: 1.8rem;
-  font-weight: 800;
-  color: var(--text-main);
-  margin-bottom: 0.2rem;
-}
-.subtitle {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-}
+.header-section { text-align: center; margin-bottom: 2.5rem; }
+.page-title { font-size: 1.8rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.2rem; }
+.subtitle { color: var(--text-muted); font-size: 0.95rem; }
 
-/* --- GRID LAYOUT --- */
 .cart-container {
   display: grid;
-  grid-template-columns: 1.6fr 1fr; /* 60% productos, 40% resumen */
+  grid-template-columns: 1.6fr 1fr;
   gap: 2.5rem;
   align-items: start;
 }
 
-/* --- TARJETA DE PRODUCTO --- */
 .product-card {
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -239,12 +280,10 @@ onMounted(async () => {
   margin-bottom: 1.5rem;
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  position: relative; /* Para botón mobile */
+  position: relative;
 }
 
-.product-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
-}
+.product-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08); }
 
 .product-main-content {
   padding: 1.25rem;
@@ -253,19 +292,15 @@ onMounted(async () => {
   align-items: center;
 }
 
-/* Imagen */
-.product-image-wrapper {
-  flex-shrink: 0;
-}
+.product-image-wrapper { flex-shrink: 0; }
 .product-img {
   width: 5.5rem;
   height: 5.5rem;
   object-fit: cover;
-  border-radius: 50%; /* Manteniendo tu estilo redondo */
+  border-radius: 50%;
   border: 2px solid #f3f4f6;
 }
 
-/* Detalles */
 .product-details {
   flex-grow: 1;
   display: flex;
@@ -285,17 +320,10 @@ onMounted(async () => {
   color: var(--text-main);
   line-height: 1.3;
   margin: 0;
-  /* FormatName se encarga del texto, pero aseguramos estilo base */
 }
 
-/* Acciones (Cantidad y Precio) */
-.product-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+.product-actions { display: flex; justify-content: space-between; align-items: center; }
 
-/* Control de Cantidad (Pill) */
 .qty-control {
   display: inline-flex;
   align-items: center;
@@ -336,33 +364,18 @@ onMounted(async () => {
 .qty-btn:active { transform: scale(0.9); }
 .qty-btn:hover { background: var(--primary); color: white; }
 
-.qty-display {
-  font-weight: 700;
-  min-width: 30px;
-  text-align: center;
-  font-size: 0.9rem;
-}
+.qty-display { font-weight: 700; min-width: 30px; text-align: center; font-size: 0.9rem; }
 .qty-control.small .qty-display { font-size: 0.8rem; min-width: 24px; }
 
-/* Precios */
 .price-display {
   text-align: right;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
 }
-.price-old {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-decoration: line-through;
-}
-.price-final {
-  font-weight: 700;
-  font-size: 1rem;
-  color: var(--text-main);
-}
+.price-old { font-size: 0.8rem; color: var(--text-muted); text-decoration: line-through; }
+.price-final { font-weight: 700; font-size: 1rem; color: var(--text-main); }
 
-/* Botón Eliminar */
 .btn-delete {
   background: transparent;
   border: none;
@@ -375,12 +388,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
 }
-.btn-delete:hover {
-  background-color: var(--danger-bg);
-  color: var(--danger);
-}
+.btn-delete:hover { background-color: var(--danger-bg); color: var(--danger); }
 
-/* --- ADICIONALES --- */
 .additions-section {
   background-color: #f8fafc;
   border-top: 1px solid var(--border);
@@ -404,12 +413,7 @@ onMounted(async () => {
   font-size: 0.9rem;
 }
 
-.addition-info {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  color: var(--text-main);
-}
+.addition-info { display: flex; gap: 0.5rem; align-items: center; color: var(--text-main); }
 .addition-qty-badge {
   font-weight: 700;
   font-size: 0.8rem;
@@ -418,17 +422,9 @@ onMounted(async () => {
   border-radius: 4px;
 }
 
-.addition-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.addition-price {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
+.addition-actions { display: flex; align-items: center; gap: 1rem; }
+.addition-price { font-size: 0.85rem; font-weight: 600; }
 
-/* --- EMPTY STATE --- */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -462,41 +458,21 @@ onMounted(async () => {
 }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
-/* --- RESPONSIVE UTILS --- */
 .mobile-only { display: none; }
 .sticky-content { position: sticky; top: 1rem; }
 
-/* Animación de lista */
 .list-enter-active, .list-leave-active { transition: all 0.3s ease; }
 .list-enter-from, .list-leave-to { opacity: 0; transform: translateX(-20px); }
 
-/* --- MEDIA QUERIES --- */
 @media (max-width: 900px) {
-  .cart-container {
-    grid-template-columns: 1fr; /* Una columna */
-    gap: 1.5rem;
-  }
-  
+  .cart-container { grid-template-columns: 1fr; gap: 1.5rem; }
   .desktop-only { display: none; }
   .mobile-only { display: flex; position: absolute; top: 0.5rem; right: 0.5rem; }
 
-  .product-main-content {
-    padding: 1rem;
-    gap: 1rem;
-  }
+  .product-main-content { padding: 1rem; gap: 1rem; }
+  .product-header { padding-right: 1.5rem; }
+  .product-img { width: 4rem; height: 4rem; }
 
-  .product-header {
-    padding-right: 1.5rem; /* Espacio para la X de cerrar */
-  }
-
-  .product-img {
-    width: 4rem;
-    height: 4rem;
-  }
-
-  .qty-btn {
-    width: 36px; /* Más grande para el dedo */
-    height: 36px;
-  }
+  .qty-btn { width: 36px; height: 36px; }
 }
 </style>
