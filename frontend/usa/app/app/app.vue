@@ -3,19 +3,34 @@
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
+    <SiteDialogRecoger :city_id="15" ></SiteDialogRecoger>
 
     <ToastContainer />
 
     <CartBar />
     <MenuSearchModal />
+
+    <!-- ✅ Botón flotante de WhatsApp (NuxtIcon) -->
+    <a
+     
+      :href="whatsappFloatUrl"
+      target="_blank"
+      rel="noopener"
+      class="wsp-float"
+      aria-label="Abrir WhatsApp"
+      title="¿Tienes dudas? Escríbenos"
+    >
+      <Icon size="xx-large" name="mdi:whatsapp" class="wsp-icon" />
+    </a>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, watch, nextTick } from '#imports'
+import { onMounted, onBeforeUnmount, watch, nextTick, computed } from '#imports'
 import { useRoute, useRouter } from '#imports'
 import { useSitesStore, useUserStore, usecartStore } from '#imports'
 import { useSedeFromSubdomain } from '#imports'
+import SiteDialogRecoger from './components/siteDialogRecoger.vue'
 import { URI } from './service/conection'
 
 const siteStore = useSitesStore()
@@ -32,12 +47,24 @@ function cleanQueryParams({ removeHash = false, removeCredentials = false, remov
   const q = { ...route.query }
   let changed = false
 
-  if (removeHash && q.hash !== undefined) { delete q.hash; changed = true }
-  if (removeCredentials) {
-    if (q.inserted_by !== undefined) { delete q.inserted_by; changed = true }
-    if (q.token !== undefined) { delete q.token; changed = true }
+  if (removeHash && q.hash !== undefined) {
+    delete q.hash
+    changed = true
   }
-  if (removeIframe && q.iframe !== undefined) { delete q.iframe; changed = true }
+  if (removeCredentials) {
+    if (q.inserted_by !== undefined) {
+      delete q.inserted_by
+      changed = true
+    }
+    if (q.token !== undefined) {
+      delete q.token
+      changed = true
+    }
+  }
+  if (removeIframe && q.iframe !== undefined) {
+    delete q.iframe
+    changed = true
+  }
 
   if (changed) router.replace({ query: q })
 }
@@ -62,7 +89,7 @@ function restoreLocationFromMeta(meta) {
       delivery_price: price,
       neighborhood_id: null,
       id: null,
-      site_id: null,
+      site_id: null
     }
 
     siteStore.current_delivery = price
@@ -78,7 +105,7 @@ function restoreLocationFromMeta(meta) {
       delivery_price: price,
       neighborhood_id: nb.neighborhood_id ?? nb.id ?? null,
       id: nb.id ?? nb.neighborhood_id ?? null,
-      site_id: nb.site_id ?? null,
+      site_id: nb.site_id ?? null
     }
 
     siteStore.current_delivery = price
@@ -88,7 +115,7 @@ function restoreLocationFromMeta(meta) {
       delivery_price: 0,
       neighborhood_id: null,
       id: null,
-      site_id: null,
+      site_id: null
     }
     siteStore.current_delivery = 0
   }
@@ -96,7 +123,6 @@ function restoreLocationFromMeta(meta) {
 
 // ✅ helper: siempre leer subdominio “fresco”, no uno “capturado” al inicio
 function getCurrentSubdomain() {
-  // Si tu composable ya resuelve bien, úsalo, pero llamado “en el momento”
   const sede = useSedeFromSubdomain()
   return typeof sede === 'string' ? sede : sede?.value
 }
@@ -105,7 +131,6 @@ async function bootstrapFromUrl(reason = 'nav') {
   if (running) return
   running = true
   try {
-    // clave para evitar repetir exactamente lo mismo
     const key = JSON.stringify({
       path: route.fullPath,
       hash: route.query.hash,
@@ -113,7 +138,7 @@ async function bootstrapFromUrl(reason = 'nav') {
       token: route.query.token,
       iframe: route.query.iframe,
       host: process.client ? window.location.host : '',
-      reason,
+      reason
     })
     if (key === lastKey) return
     lastKey = key
@@ -156,7 +181,6 @@ async function bootstrapFromUrl(reason = 'nav') {
           const restoredData = jsonResponse?.data || {}
 
           if (restoredData.site_location) {
-            // 🔁 solo re-init si cambia la sede
             const prevId = siteStore.location.site?.site_id ?? siteStore.location.site?.id
             const newId = restoredData.site_location?.site_id ?? restoredData.site_location?.id
             siteStore.location.site = restoredData.site_location
@@ -169,33 +193,26 @@ async function bootstrapFromUrl(reason = 'nav') {
             userStore.user = {
               ...userStore.user,
               ...restoredData.user,
-              iframe: (currentIframeState !== undefined) ? currentIframeState : restoredData.user.iframe,
+              iframe: currentIframeState !== undefined ? currentIframeState : restoredData.user.iframe
             }
           }
 
           restoreLocationFromMeta(restoredData?.location_meta)
 
           if (restoredData.cart) {
-            const cartItems = Array.isArray(restoredData.cart)
-              ? restoredData.cart
-              : (restoredData.cart.items || [])
-
+            const cartItems = Array.isArray(restoredData.cart) ? restoredData.cart : restoredData.cart.items || []
             if (cartItems.length > 0) {
-              cartStore.cart = Array.isArray(restoredData.cart)
-                ? restoredData.cart
-                : restoredData.cart
+              cartStore.cart = Array.isArray(restoredData.cart) ? restoredData.cart : restoredData.cart
             }
           }
 
           if (restoredData.discount) cartStore.applyCoupon(restoredData.discount)
           if (restoredData.coupon_ui && cartStore.setCouponUi) cartStore.setCouponUi(restoredData.coupon_ui)
 
-          // 👇 OJO: esto dispara navegación interna (router.replace),
-          // por eso tenemos lock + lastKey arriba.
           cleanQueryParams({
             removeHash: true,
             removeCredentials: !!(qInsertedBy && qToken),
-            removeIframe: qiframe !== undefined,
+            removeIframe: qiframe !== undefined
           })
         }
       } catch (err) {
@@ -229,7 +246,7 @@ async function bootstrapFromUrl(reason = 'nav') {
         if (needsCredClean || needsIframeClean) {
           cleanQueryParams({
             removeCredentials: needsCredClean,
-            removeIframe: needsIframeClean,
+            removeIframe: needsIframeClean
           })
         }
       } catch (err) {
@@ -237,25 +254,20 @@ async function bootstrapFromUrl(reason = 'nav') {
       }
     }
   } finally {
-    // mini-delay para evitar re-entradas por route.replace + watchers
     await nextTick()
     running = false
   }
 }
 
 function onPopState() {
-  // back/forward del navegador
   bootstrapFromUrl('popstate')
 }
 
 onMounted(() => {
   bootstrapFromUrl('mounted')
-
-  // ✅ back/forward
   window.addEventListener('popstate', onPopState)
 })
 
-// ✅ cualquier navegación interna (incluye botón atrás dentro de SPA)
 watch(
   () => route.fullPath,
   () => bootstrapFromUrl('route-watch'),
@@ -265,4 +277,70 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener('popstate', onPopState)
 })
+
+/* ======================================================
+   ✅ WhatsApp flotante (siteStore.location.site.site_phone)
+====================================================== */
+function cleanPhone(raw) {
+  if (!raw) return null
+  const digits = String(raw).replace(/\D/g, '')
+  return digits.length >= 10 ? digits : null
+}
+
+const whatsappPhone = computed(() => cleanPhone(siteStore.location?.site?.site_phone))
+
+const showWhatsappFloat = computed(() => {
+  // si estás en iframe y no quieres mostrarlo:
+  if (userStore.user?.iframe) return false
+  return !!whatsappPhone.value
+})
+
+const whatsappFloatUrl = computed(() => {
+  const baseUrl = 'https://api.whatsapp.com/send'
+  const phone = whatsappPhone.value || ''
+
+  const pageUrl = process.client ? window.location.href : ''
+  const siteName = siteStore.location?.site?.site_name || 'la sede'
+
+  const text = `Hola 😊 Tengo una duda con ${pageUrl ? `\n\nLink: ${pageUrl}` : ''}`
+
+  const params = new URLSearchParams({ phone, text })
+  return `${baseUrl}?${params.toString()}`
+})
 </script>
+
+<style scoped>
+/* ✅ Botón flotante WhatsApp */
+.wsp-float {
+  position: fixed;
+  right: 16px;
+  bottom: 96px; /* deja espacio por CartBar */
+  width: 48px;
+  height:48px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+
+.wsp-float:hover {
+  transform: scale(1.05);
+}
+
+.wsp-float:active {
+  transform: scale(0.98);
+}
+
+/* NuxtIcon suele renderizar svg dentro */
+.wsp-icon :deep(svg) {
+  width: 40px;
+  height: 28px;
+  display: block;
+}
+</style>

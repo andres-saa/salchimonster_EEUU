@@ -3,9 +3,9 @@
     <main class="track-main">
       <section class="track-card animate-entry">
         <header class="track-card__header">
-          <h1 class="track-title">{{ t('track_title') }}</h1>
+          <h1 class="track-title">Rastrea tu pedido</h1>
           <p class="track-subtitle">
-            {{ t('track_subtitle') }}
+            Ingresa el ID de tu pedido para ver su estado actual y el historial.
           </p>
         </header>
 
@@ -16,8 +16,7 @@
               v-model="orderId"
               type="text"
               class="search-input"
-              :placeholder="t('order_id_placeholder')"
-              autocomplete="off"
+              placeholder="Ejemplo: MOD-0054..."
             />
           </div>
 
@@ -28,11 +27,7 @@
                 name="mdi:loading"
                 class="search-icon spin-animation"
               />
-              <Icon
-                v-else
-                name="mdi:magnify"
-                class="search-icon"
-              />
+              <Icon v-else name="mdi:magnify" class="search-icon" />
             </Transition>
           </button>
         </form>
@@ -41,7 +36,7 @@
           <Transition name="fade" mode="out-in">
             <div v-if="loading" class="alert alert--info" key="loading">
               <Icon name="mdi:clock-outline" class="alert__icon" />
-              <span>{{ t('searching') }}</span>
+              <span>Buscando tu pedido...</span>
             </div>
 
             <div v-else-if="error" class="alert alert--error" key="error">
@@ -56,45 +51,67 @@
             v-if="!loading && !error && currentStatus"
             class="current-status"
           >
-            <h2 class="current-status__title">
-              {{ t('thanks') }}
-            </h2>
+            <h2 class="current-status__title">¡Gracias por tu compra!</h2>
 
-            <p class="current-status__text">
-              {{ statusMessage(currentStatus.status) }}
+            <p
+              v-if="currentStatus.status === 'generada'"
+              class="current-status__text"
+            >
+              Tu pedido ha sido recibido y está en proceso de ser atendido.
+            </p>
+            <p
+              v-else-if="currentStatus.status === 'en preparacion'"
+              class="current-status__text"
+            >
+              Tu pedido se encuentra en preparación y en breve estará listo para
+              enviarse.
+            </p>
+            <p
+              v-else-if="currentStatus.status === 'enviada'"
+              class="current-status__text"
+            >
+              ¡Tu pedido está en camino!
+            </p>
+            <p v-else class="current-status__text">
+              Estado actual: <strong>{{ currentStatus.status }}</strong>
             </p>
 
             <div
-              v-if="normalizeStatus(currentStatus.status) === 'enviada'"
+              v-if="currentStatus.status === 'enviada'"
               class="current-status__badge pulse-badge"
             >
-              <Icon name="mdi:truck-delivery-outline" class="current-status__badge-icon" />
-              <span>{{ t('on_the_way_badge') }}</span>
+              <Icon
+                name="mdi:truck-delivery-outline"
+                class="current-status__badge-icon"
+              />
+              <span>Tu pedido está en camino</span>
             </div>
           </section>
         </Transition>
 
         <section
-          v-if="!loading && !error && currentStatus && firstHistory && firstHistory.status_history"
+          v-if="
+            !loading &&
+            !error &&
+            currentStatus &&
+            firstHistory &&
+            firstHistory.status_history
+          "
           class="history"
         >
-          <h3 class="history__title">{{ t('status_history') }}</h3>
+          <h3 class="history__title">Historial de estado</h3>
 
           <TransitionGroup name="list" tag="ul" class="status-timeline">
             <li
               v-for="(stat, index) in firstHistory.status_history"
-              :key="stat.timestamp || index"
+              :key="stat.timestamp"
               class="status-timeline__item"
               :style="{ transitionDelay: `${index * 100}ms` }"
             >
               <div class="status-timeline__marker"></div>
               <div class="status-timeline__content">
-                <p class="status-timeline__status">
-                  {{ statusLabel(stat.status) }}
-                </p>
-                <p class="status-timeline__timestamp">
-                  {{ stat.timestamp }}
-                </p>
+                <p class="status-timeline__status">{{ stat.status }}</p>
+                <p class="status-timeline__timestamp">{{ stat.timestamp }}</p>
               </div>
             </li>
           </TransitionGroup>
@@ -105,9 +122,12 @@
             v-if="!loading && !error && !currentStatus && !firstHistory"
             class="empty-state"
           >
-            <Icon name="mdi:clipboard-text-search-outline" class="empty-state__icon float-animation" />
+            <Icon
+              name="mdi:clipboard-text-search-outline"
+              class="empty-state__icon float-animation"
+            />
             <p class="empty-state__text">
-              {{ t('empty_state') }}
+              Ingresa el ID de tu pedido para ver su estado.
             </p>
           </section>
         </Transition>
@@ -117,60 +137,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useUserStore } from '#imports'
-import { URI } from '@/service/conection'
+import { ref, computed, onMounted } from "vue"
+import { useRoute, useRouter } from "vue-router"
+import { URI } from "@/service/conection"
 
 const route = useRoute()
-const user = useUserStore()
+const router = useRouter()
 
-/* ================= i18n (desde store) ================= */
-const lang = computed(() =>
-  (user?.lang?.name || 'es').toString().toLowerCase() === 'en' ? 'en' : 'es'
-)
-
-const DICT = {
-  es: {
-    track_title: 'Rastrea tu pedido',
-    track_subtitle: 'Ingresa el ID de tu pedido para ver su estado actual y el historial.',
-    order_id_placeholder: 'Ejemplo: MOD-0054...',
-    searching: 'Buscando tu pedido...',
-    err_empty: 'Por favor ingresa el ID de tu pedido.',
-    err_not_found: 'No pudimos encontrar tu pedido. Verifica el ID e inténtalo de nuevo.',
-    err_no_current: 'No encontramos el estado actual de tu pedido.',
-    thanks: '¡Gracias por tu compra!',
-    status_history: 'Historial de estado',
-    empty_state: 'Ingresa el ID de tu pedido para ver su estado.',
-    on_the_way_badge: 'Tu pedido está en camino',
-    msg_generada: 'Tu pedido ha sido recibido y está en proceso de ser atendido.',
-    msg_preparacion: 'Tu pedido se encuentra en preparación y en breve estará listo para enviarse.',
-    msg_enviada: '¡Tu pedido está en camino!',
-    current_status_prefix: 'Estado actual:'
-  },
-  en: {
-    track_title: 'Track your order',
-    track_subtitle: 'Enter your order ID to see the current status and history.',
-    order_id_placeholder: 'Example: MOD-0054...',
-    searching: 'Searching for your order...',
-    err_empty: 'Please enter your order ID.',
-    err_not_found: "We couldn't find your order. Check the ID and try again.",
-    err_no_current: "We couldn't find the current status of your order.",
-    thanks: 'Thanks for your purchase!',
-    status_history: 'Status history',
-    empty_state: 'Enter your order ID to see its status.',
-    on_the_way_badge: 'Your order is on the way',
-    msg_generada: 'We received your order and it is being processed.',
-    msg_preparacion: 'Your order is being prepared and will be ready soon.',
-    msg_enviada: 'Your order is on the way!',
-    current_status_prefix: 'Current status:'
-  }
-}
-
-const t = (key) => DICT[lang.value]?.[key] || DICT.es[key] || key
-
-/* ================= Estado ================= */
-const orderId = ref('')
+const orderId = ref("")
 const history = ref([])
 const currentStatus = ref(null)
 const loading = ref(false)
@@ -182,51 +156,20 @@ const firstHistory = computed(() => {
     : null
 })
 
-/* ================= Traducción de estados ================= */
-// Normaliza: minúsculas, sin tildes, sin dobles espacios
-const normalizeStatus = (s) =>
-  (s || '')
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-
-// Traduce SOLO estos estados (los de tu backend/screenshot)
-const statusLabel = (raw) => {
-  const st = normalizeStatus(raw)
-
-  const MAP = {
-    es: {
-      generada: 'Generada',
-      'en preparacion': 'En preparación',
-      enviada: 'Enviada'
-    },
-    en: {
-      generada: 'Created',
-      'en preparacion': 'In preparation',
-      enviada: 'Shipped'
-    }
-  }
-
-  return MAP[lang.value]?.[st] || raw || ''
+const setOrderIdInUrl = async (id) => {
+  // ✅ mantiene cualquier otro query existente
+  const nextQuery = { ...route.query, order_id: id }
+  // ✅ cambia la URL sin recargar (no ensucia el historial)
+  await router.replace({ query: nextQuery })
+  // Si quieres que el botón "atrás" vuelva al query anterior, usa:
+  // await router.push({ query: nextQuery })
 }
 
-const statusMessage = (rawStatus) => {
-  const st = normalizeStatus(rawStatus)
-
-  if (st === 'generada') return t('msg_generada')
-  if (st === 'en preparacion') return t('msg_preparacion')
-  if (st === 'enviada') return t('msg_enviada')
-
-  return `${t('current_status_prefix')} ${statusLabel(rawStatus)}`
-}
-
-/* ================= Fetch ================= */
 const getStatusHistory = async () => {
-  if (!orderId.value) {
-    error.value = t('err_empty')
+  const id = (orderId.value || "").trim()
+
+  if (!id) {
+    error.value = "Por favor ingresa el ID de tu pedido."
     currentStatus.value = null
     history.value = []
     return
@@ -238,20 +181,25 @@ const getStatusHistory = async () => {
   history.value = []
 
   try {
-    const result = await $fetch(`${URI}/history-my-orden/${orderId.value}`)
+    // ✅ 1) Actualiza la URL al buscar
+    await setOrderIdInUrl(id)
 
-    // timeout estético opcional
+    // ✅ 2) Consulta el historial
+    const result = await $fetch(`${URI}/history-my-orden/${id}`)
+
+    // Timeout estético opcional
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     history.value = Array.isArray(result) ? result : []
     currentStatus.value = history.value[0]?.current_status || null
 
     if (!currentStatus.value) {
-      error.value = t('err_no_current')
+      error.value = "No encontramos el estado actual de tu pedido."
     }
   } catch (err) {
-    console.error('Error al obtener el historial de estado:', err)
-    error.value = t('err_not_found')
+    console.error("Error al obtener el historial de estado:", err)
+    error.value =
+      "No pudimos encontrar tu pedido. Verifica el ID e inténtalo de nuevo."
     history.value = []
     currentStatus.value = null
   } finally {
@@ -259,8 +207,8 @@ const getStatusHistory = async () => {
   }
 }
 
-/* ================= Auto-load (query) ================= */
 onMounted(() => {
+  // ✅ acepta ?order_id=XXX o ?id=XXX
   const idFromUrl = route.query.order_id || route.query.id
   if (idFromUrl) {
     orderId.value = String(idFromUrl)
@@ -268,9 +216,6 @@ onMounted(() => {
   }
 })
 </script>
-
-
-
 
 <style scoped>
 /* TUS MISMOS ESTILOS - NO ES NECESARIO CAMBIARLOS */
@@ -363,11 +308,11 @@ onMounted(() => {
 
 .search-input:focus ~ .search-input-icon,
 .search-input:focus + .search-input-icon {
-    color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .search-input-wrapper:focus-within .search-input-icon {
-    color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .search-input {
@@ -404,7 +349,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  overflow: hidden; 
+  overflow: hidden;
 }
 
 .search-button:disabled {
@@ -433,11 +378,13 @@ onMounted(() => {
 }
 
 @keyframes spin {
-  100% { transform: rotate(360deg); }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .track-messages {
-  min-height: 2.5rem; 
+  min-height: 2.5rem;
   margin-bottom: 0.5rem;
   overflow: hidden;
 }
@@ -472,7 +419,7 @@ onMounted(() => {
   background: linear-gradient(135deg, #fff1f2, #fff7ed);
   border: 1px solid rgba(252, 165, 165, 0.4);
   text-align: center;
-  box-shadow: inset 0 0 20px rgba(255,255,255,0.5);
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.5);
 }
 
 .current-status__title {
@@ -507,9 +454,15 @@ onMounted(() => {
 }
 
 @keyframes pulse-green {
-  0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(74, 222, 128, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(74, 222, 128, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
 }
 
 .history {
@@ -542,7 +495,7 @@ onMounted(() => {
 }
 
 .status-timeline__item::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0.5rem;
   top: 0.7rem;
@@ -613,8 +566,13 @@ onMounted(() => {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .empty-state__text {

@@ -176,7 +176,7 @@
           </button>
 
           <button
-            v-else-if="route.path == '/pay' && !reportes.loading.visible && siteStore.status?.status !== 'closed' && !isLoggedIn && user.user.payment_method_option?.id == 9"
+            v-else-if="route.path == '/pay' && !reportes.loading.visible && siteStore.status?.status == 'closed' && !isLoggedIn && user.user.payment_method_option?.id == 9"
             type="button"
             class="btn btn-primary"
             :disabled="reportes.loading.visible"
@@ -349,8 +349,8 @@ const pay = async () => {
   }
 
   order_id.value = await orderServiceEpayco.sendOrder()
-  if (!order_id.value) return
-  payWithEpayco(order_id.value)
+  // if (!order_id.value) return
+  // payWithEpayco(order_id.value)
 }
 
 const payWithEpayco = (id) => {

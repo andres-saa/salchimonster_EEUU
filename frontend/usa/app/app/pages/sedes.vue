@@ -1,11 +1,11 @@
 <template>
   <div class="main-container">
-    <h1 class="sr-only">{{ t('title') }}</h1>
+    <h1 class="sr-only">Nuestras Sedes Salchimonster</h1>
 
     <div class="container">
       <div v-if="pending && !sedes.length" class="loading-state">
         <div class="spinner"></div>
-        <p>{{ t('loading') }}</p>
+        <p>Cargando sedes...</p>
       </div>
 
       <article
@@ -17,24 +17,22 @@
         itemtype="https://schema.org/Restaurant"
       >
         <div class="sede-image-wrapper">
-          <img
-            :src="getOptimizedSrc(sede)"
-            :alt="`${t('alt_prefix')} ${sede.site_name}`"
-            class="sede-image"
-            loading="lazy"
-            itemprop="image"
-            @error="(e) => onImgError(e, sede)"
-          />
-
+<img
+  :src="getOptimizedSrc(sede)"
+  :alt="`Fachada Restaurante Salchimonster ${sede.site_name}`"
+  class="sede-image"
+  loading="lazy"
+  @error="(e) => onImgError(e, sede)"
+/>
+          
           <div class="map-floating-btn" @click.stop>
             <a
-              v-if="sede.maps"
               :href="sede.maps"
               target="_blank"
               rel="noopener noreferrer"
-              :aria-label="`${t('maps_aria')} ${sede.site_name} ${t('maps_aria_suffix')}`"
+              :aria-label="`Ver ubicación de ${sede.site_name} en Google Maps`"
             >
-              <Icon name="mdi:google-maps" class="map-icon" />
+               <Icon name="mdi:google-maps" class="map-icon" />
             </a>
           </div>
 
@@ -44,10 +42,10 @@
                 <Icon name="mdi:map-marker" class="icon-small" />
                 {{ cityName(sede.city_id) }}
               </p>
-
+              
               <h3 class="sede-name" itemprop="name">
                 SALCHIMONSTER {{ sede.site_name }}
-              </h3>
+              </h3>  
 
               <address class="sede-address" itemprop="address">
                 {{ sede.site_address }}
@@ -64,7 +62,6 @@
                 <Icon name="mdi:whatsapp" class="whatsapp-icon" />
                 <span itemprop="telephone">{{ displayPhone(sede.site_phone) }}</span>
               </a>
-
               <p v-else class="sede-phone-text">
                 <Icon name="mdi:whatsapp" class="whatsapp-icon" />
                 <span>{{ displayPhone(sede.site_phone) }}</span>
@@ -84,7 +81,7 @@
         aria-modal="true"
       >
         <div class="dialog">
-          <button class="dialog-close" @click="closeDialog" :aria-label="t('close')">
+          <button class="dialog-close" @click="closeDialog" aria-label="Cerrar ventana">
             <Icon name="mdi:close" />
           </button>
 
@@ -99,12 +96,12 @@
             </div>
 
             <div class="dialog-row">
-              <span class="dialog-label">{{ t('address_label') }}</span>
+              <span class="dialog-label">Dirección:</span>
               <span class="dialog-value">{{ selectedSede.site_address }}</span>
             </div>
 
             <div class="dialog-row">
-              <span class="dialog-label">{{ t('phone_label') }}</span>
+              <span class="dialog-label">Teléfono:</span>
               <a
                 v-if="waLink(selectedSede)"
                 :href="waLink(selectedSede)"
@@ -118,9 +115,14 @@
             </div>
 
             <div class="dialog-action" v-if="selectedSede.maps">
-              <a :href="selectedSede.maps" target="_blank" rel="noopener" class="btn-maps">
+              <a
+                :href="selectedSede.maps"
+                target="_blank"
+                rel="noopener"
+                class="btn-maps"
+              >
                 <Icon name="mdi:google-maps" />
-                {{ t('open_maps') }}
+                Abrir en Google Maps
               </a>
             </div>
           </div>
@@ -132,51 +134,16 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useHead, useAsyncData, useSitesStore, useUserStore } from '#imports'
+import { useHead, useAsyncData, useSitesStore } from '#imports'
 import { URI } from '@/service/conection'
 
 const sitesStore = useSitesStore()
-const userStore = useUserStore()
-
-const CACHE_TTL = 30 * 60 * 1000
+const CACHE_TTL = 30 * 60 * 1000 
 const FALLBACK_IMG = 'https://gestion.salchimonster.com/images/logo.png'
 
 const showDialog = ref(false)
 const selectedSede = ref(null)
 
-/* ================= I18n mínimo ================= */
-const lang = computed(() => {
-  const raw = (userStore?.lang?.name || userStore?.user?.lang?.name || 'es').toString().toLowerCase()
-  return raw === 'en' ? 'en' : 'es'
-})
-
-const DICT = {
-  es: {
-    title: 'Nuestras Sedes Salchimonster',
-    loading: 'Cargando sedes...',
-    close: 'Cerrar ventana',
-    address_label: 'Dirección:',
-    phone_label: 'Teléfono:',
-    open_maps: 'Abrir en Google Maps',
-    alt_prefix: 'Fachada Restaurante Salchimonster',
-    maps_aria: 'Ver ubicación de',
-    maps_aria_suffix: 'en Google Maps'
-  },
-  en: {
-    title: 'Our Salchimonster Locations',
-    loading: 'Loading locations...',
-    close: 'Close dialog',
-    address_label: 'Address:',
-    phone_label: 'Phone:',
-    open_maps: 'Open in Google Maps',
-    alt_prefix: 'Salchimonster restaurant front',
-    maps_aria: 'View location of',
-    maps_aria_suffix: 'in Google Maps'
-  }
-}
-const t = (k) => DICT[lang.value]?.[k] || DICT.es[k] || k
-
-/* ================= Fetch (SSR + cache cliente) ================= */
 const {
   data: rawData,
   pending,
@@ -195,82 +162,74 @@ const {
 
 if (process.client) {
   const cachedWrapper = sitesStore.getSitesViewCache ? sitesStore.getSitesViewCache() : null
-  if (cachedWrapper?.data && cachedWrapper?.timestamp) {
+  if (cachedWrapper && cachedWrapper.data && cachedWrapper.timestamp) {
     if (Date.now() - cachedWrapper.timestamp < CACHE_TTL) {
       rawData.value = cachedWrapper.data
     }
   }
 }
 
-watch(
-  rawData,
-  (val) => {
-    if (process.client && val?.sites?.length > 0 && sitesStore.setSitesViewCache) {
-      sitesStore.setSitesViewCache({ data: val, timestamp: Date.now() })
-    }
-  },
-  { immediate: true }
-)
+watch(rawData, (val) => {
+  if (process.client && val?.sites?.length > 0 && sitesStore.setSitesViewCache) {
+    sitesStore.setSitesViewCache({ data: val, timestamp: Date.now() })
+  }
+}, { immediate: true })
 
 let refreshInterval = null
 onMounted(async () => {
-  // refresco periódico solo en cliente
-  if (process.client) {
-    // si ya hay SSR data, no es obligatorio refrescar de una
-    refreshInterval = setInterval(() => refresh(), 10 * 60 * 1000)
-    window.addEventListener('keydown', onKeydown)
-  }
+  if (!pending.value) refresh()
+  refreshInterval = setInterval(() => refresh(), 10 * 60 * 1000)
 })
 onBeforeUnmount(() => {
   if (refreshInterval) clearInterval(refreshInterval)
-  if (process.client) window.removeEventListener('keydown', onKeydown)
 })
 
 const sedes = computed(() => rawData.value?.sites || [])
 const cities = computed(() => rawData.value?.cities || [])
 
 const filteredSedes = computed(() => {
-  return sedes.value.filter((s) =>
-    s.city_id &&
-    s.show_on_web &&
-    !s.comming_soon &&
-    s.time_zone === 'America/New_York' &&
-    Number(s.site_id) !== 32
+  return sedes.value.filter(s => 
+    s.city_id && s.show_on_web && !s.comming_soon && 
+    s.time_zone === 'America/New_York' && s.site_id !== 32
   )
 })
 
-/* ================= Imágenes (fallback en cascada) ================= */
+/* IMAGENES CON FALLBACK EN CASCADA */
 const getOptimizedSrc = (sede) => {
-  if (sede.img_id) return `${URI}/read-photo-product/${sede.img_id}`
+  // Prioridad 1: Si existe img_id, usamos la ruta de foto de producto
+  if (sede.img_id) {
+    return `${URI}/read-photo-product/${sede.img_id}`
+  }
+  // Prioridad 2: Si no hay img_id, intentamos con la ruta basada en site_id
   return `${URI}/read-product-image/600/site-${sede.site_id}`
 }
 
 const onImgError = (event, sede) => {
-  const img = event.target
+  const imgElement = event.target
   const secondarySrc = `${URI}/read-product-image/600/site-${sede.site_id}`
+  
+  // Verificamos qué URL es la que falló para decidir el siguiente paso
+  
+  // Si la imagen actual YA ES el fallback (logo), no hacemos nada para evitar bucles
+  if (imgElement.src === FALLBACK_IMG) return
 
-  // ya está en fallback → no sigas
-  if ((img.currentSrc || img.src || '').includes(FALLBACK_IMG)) return
-
-  // si falló la secundaria → logo
-  if ((img.src || '').includes(`site-${sede.site_id}`)) {
-    img.src = FALLBACK_IMG
-  } else {
-    // falló img_id → intenta secundaria
-    img.src = secondarySrc
+  // Si la imagen que falló es la ruta secundaria (la que usa site-{id}), 
+  // significa que ya fallaron las dos opciones. Vamos al logo.
+  if (imgElement.src.includes(`site-${sede.site_id}`)) {
+    imgElement.src = FALLBACK_IMG
+  } 
+  // Si no era la secundaria (significa que falló la img_id), intentamos la secundaria
+  else {
+    imgElement.src = secondarySrc
   }
 }
 
-/* ================= Utilidades ================= */
+ 
+
+/* UTILIDADES */
 const byImgIdentifier = (identifier) => `${URI}/read-photo-product/${identifier}`
-
-const cityName = (city_id) => {
-  const cid = String(city_id ?? '')
-  return cities.value.find((c) => String(c.city_id) === cid)?.city_name ?? ''
-}
-
+const cityName = (city_id) => cities.value.find(s => s.city_id === city_id)?.city_name ?? ''
 const displayPhone = (raw = '') => raw?.trim() || '—'
-
 const toE164CO = (raw = '') => {
   let d = String(raw).replace(/\D/g, '')
   if (!d) return ''
@@ -278,7 +237,6 @@ const toE164CO = (raw = '') => {
   if (d.length === 10 && d.startsWith('3')) return '57' + d
   return d
 }
-
 const waLink = (sede) => {
   const num = toE164CO(sede?.site_phone || '')
   if (!num) return ''
@@ -286,7 +244,6 @@ const waLink = (sede) => {
   return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
 }
 
-/* ================= Dialog ================= */
 const openSedeDialog = (sede) => {
   selectedSede.value = sede
   showDialog.value = true
@@ -296,46 +253,29 @@ const closeDialog = () => {
   selectedSede.value = null
 }
 
-const onKeydown = (e) => {
-  if (e.key === 'Escape' && showDialog.value) closeDialog()
-}
-
-/* ================= SEO / JSON-LD ================= */
 useHead(() => {
-  const structuredData = filteredSedes.value.map((sede) => {
-    const phoneE164 = toE164CO(sede.site_phone || '')
-    return {
-      '@context': 'https://schema.org',
-      '@type': 'Restaurant',
-      name: `Salchimonster ${sede.site_name}`,
-      image: sede.img_id ? byImgIdentifier(sede.img_id) : FALLBACK_IMG,
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: sede.site_address,
-        addressLocality: cityName(sede.city_id),
-        addressCountry: 'CO'
-      },
-      telephone: phoneE164 ? `+${phoneE164}` : (sede.site_phone || ''),
-      url: sede.maps || undefined
-    }
-  })
+  const structuredData = filteredSedes.value.map(sede => ({
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    "name": `Salchimonster ${sede.site_name}`,
+    "image": sede.img_id ? byImgIdentifier(sede.img_id) : FALLBACK_IMG,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": sede.site_address,
+      "addressLocality": cityName(sede.city_id),
+      "addressCountry": "CO" 
+    },
+    "telephone": sede.site_phone,
+    "url": sede.maps
+  }))
 
   return {
-    title: t('title') + ' | Salchimonster',
-    meta: [
-      {
-        name: 'description',
-        content: lang.value === 'en'
-          ? 'Find your nearest Salchimonster restaurant.'
-          : 'Encuentra tu restaurante Salchimonster más cercano.'
-      }
-    ],
+    title: 'Nuestras Sedes | Salchimonster',
+    meta: [{ name: 'description', content: 'Encuentra tu restaurante Salchimonster más cercano.' }],
     script: [{ type: 'application/ld+json', children: JSON.stringify(structuredData) }]
   }
 })
 </script>
-
-<!-- tu <style scoped> lo puedes dejar tal cual -->
 
 <style scoped>
 :root {

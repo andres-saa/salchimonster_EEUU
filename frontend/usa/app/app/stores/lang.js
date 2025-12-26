@@ -1,7 +1,4 @@
-// /app/app/stores/lang.js
-import { defineStore } from 'pinia'
-
-export const texts = {
+const texts = {
   /* ────────────────  ESPAÑOL  ──────────────── */
   es: {
     menus: {
@@ -16,22 +13,6 @@ export const texts = {
       sonando: "Sonando"
     },
 
-    menu_page: {
-      loading_menu: "Cargando nuestro menú...",
-      product_singular: "producto",
-      product_plural: "productos",
-      page_title_base: "Carta Salchimonster"
-    },
-
-    sidebar: {
-      menu_title: "Menú",
-      close_menu_aria: "Cerrar menú",
-      our_networks: "Nuestras Redes",
-      view_on: "Ver en",
-      follow_us: "¡Síguenos en nuestras redes!",
-      view_post: "Ver post"
-    },
-
     rastrear: {
       titulo: "Consultar estado de mi pedido",
       bar_placeholder: "Ingrese el número de pedido",
@@ -40,8 +21,10 @@ export const texts = {
     },
 
     Franquicias: {
+      /* Cabecera */
       titulo: "Formulario de Pre-Inscripción – Salchimonster Somos Todos",
 
+      /* Texto introductorio */
       intro1:
         "Salchimonster es una empresa que nace en 2017 a partir de una vitrina, " +
         "siendo el claro ejemplo de que con disciplina y perseverancia los sueños se cumplen. " +
@@ -58,6 +41,7 @@ export const texts = {
       slogan1: "¡¡¡AQUÍ EL MONSTRUO SOS VOS!!!",
       slogan2: "PAPIII NO ES POR VENDERTE, PERO DONDE LLEGAMOS ¡ROMPEMOS!",
 
+      /* Campos del formulario */
       fields: {
         nombre: "Nombre Completo",
         telefono: "Teléfono",
@@ -71,6 +55,7 @@ export const texts = {
         ingresos: "Confirma la fuente de tus ingresos"
       },
 
+      /* Placeholders */
       placeholders: {
         nombre: "Ingrese su nombre completo",
         telefono: "Ingrese su número de teléfono",
@@ -100,15 +85,6 @@ export const texts = {
       sonando: "Now Playing"
     },
 
-    sidebar: {
-      menu_title: "Menu",
-      close_menu_aria: "Close menu",
-      our_networks: "Our Socials",
-      view_on: "View on",
-      follow_us: "Follow us on our socials!",
-      view_post: "View post"
-    },
-
     rastrear: {
       titulo: "Check my order status",
       bar_placeholder: "Enter your order number",
@@ -117,8 +93,10 @@ export const texts = {
     },
 
     Franquicias: {
+      /* Header */
       titulo: "Pre-Registration Form – Salchimonster We Are All",
 
+      /* Intro text */
       intro1:
         "Salchimonster is a company born in 2017 from a single showcase, proving that with " +
         "discipline and perseverance dreams do come true. We currently have 11 ‘Imperio’ outlets " +
@@ -134,6 +112,7 @@ export const texts = {
       slogan1: "HERE, THE MONSTER IS YOU!",
       slogan2: "BRO, NOT TO BRAG, BUT WHEREVER WE ARRIVE, WE CRUSH IT!",
 
+      /* Form fields */
       fields: {
         nombre: "Full Name",
         telefono: "Phone Number",
@@ -147,6 +126,7 @@ export const texts = {
         ingresos: "Confirm your source of income"
       },
 
+      /* Placeholders */
       placeholders: {
         nombre: "Enter your full name",
         telefono: "Enter your phone number",
@@ -159,52 +139,9 @@ export const texts = {
       },
 
       button: "Submit"
-    },
-
-    menu_page: {
-      loading_menu: "Loading our menu...",
-      product_singular: "product",
-      product_plural: "products",
-      page_title_base: "Salchimonster Menu"
     }
   }
-}
+};
 
-// Helper seguro para leer paths tipo: "menus.domicilios"
-function getByPath(obj, path) {
-  return String(path)
-    .split('.')
-    .reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj)
-}
 
-export const useLangStore = defineStore('lang', {
-  state: () => ({
-    lang: 'es' // ✅ esto es lo que se persiste
-  }),
-
-  getters: {
-    currentTexts: (state) => texts[state.lang] || texts.es,
-
-    // ✅ t('menus.domicilios') -> string
-    t: (state) => (key, fallback) => {
-      const pack = texts[state.lang] || texts.es
-      const value = getByPath(pack, key)
-      return value ?? fallback ?? key
-    }
-  },
-
-  actions: {
-    setLang(next) {
-      const normalized = String(next || '').toLowerCase()
-      this.lang = normalized === 'en' ? 'en' : 'es'
-    },
-    toggleLang() {
-      this.lang = this.lang === 'es' ? 'en' : 'es'
-    }
-  },
-
-  persist: {
-    key: 'salchi_lang',
-    paths: ['lang']
-  }
-})
+export {texts}

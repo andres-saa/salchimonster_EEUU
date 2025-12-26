@@ -2,7 +2,7 @@ version: '3.9'
 services:
   # api_socket:
   #   build: { context: ./backend/socket, target: dev }
-  #   container_name: salchimonster_colombia_api_socket_dev
+  #   container_name: salchimonster_usa_api_socket_dev
   #   env_file: ./backend/socket/.env
   #   volumes:
   #     - ./backend/socket/app:/code
@@ -13,22 +13,22 @@ services:
   #   restart: unless-stopped
 
   front_es:
-    build: { context: ./frontend/es, target: dev }
-    container_name: salchimonster_colombia_front_es_dev
+    build: { context: ./frontend/usa, target: dev }
+    container_name: salchimonster_usa_front_colombia_dev
     volumes:
-      - ./frontend/es/app:/app
-      - front_es_node_modules:/app/node_modules
+      - ./frontend/usa/app:/app
+      - front_colombia_node_modules:/app/node_modules
     environment:
       CHOKIDAR_USEPOLLING: "true"
-    env_file: ./frontend/es/.env
+    env_file: ./frontend/usa/.env
     command: npm run dev -- --host 0.0.0.0
     ports:
-      - '3000:3000'
+      - '3004:3000'
     restart: unless-stopped
 
   front_main:
     build: { context: ./frontend/main, target: dev }
-    container_name: salchimonster_colombia_front_main_dev
+    container_name: salchimonster_usa_front_main_dev
     volumes:
       - ./frontend/main/app:/app
       - front_main_node_modules:/app/node_modules
@@ -37,9 +37,9 @@ services:
     env_file: ./frontend/main/.env
     command: npm run dev -- --host 0.0.0.0
     ports:
-      - '3001:3000'
+      - '3005:3000'
     restart: unless-stopped
 
 volumes:
-  front_es_node_modules:
+  front_colombia_node_modules:
   front_main_node_modules:

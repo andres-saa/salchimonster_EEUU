@@ -8,14 +8,14 @@
             <Icon name="mdi:rocket-launch-outline" size="3em" class="rocket-icon" />
             <div class="pulse-ring"></div>
           </div>
-          <h2 class="redirect-title">{{ t('redirect_taking_you_to') }}</h2>
+          <h2 class="redirect-title">Te estamos llevando a</h2>
           <h3 class="redirect-store">{{ targetSiteName }}</h3>
-          <p class="redirect-subtitle">{{ t('redirect_transferring_order') }}</p>
+          <p class="redirect-subtitle">Transfiriendo tu pedido...</p>
         </div>
       </div>
     </Transition>
 
-    <!-- ================== MODAL DIRECCIÓN (NATIVO) ================== -->
+    <!-- ================== MODAL DIRECCIÓN (GOOGLE) ================== -->
     <Transition name="modal-fade">
       <div v-if="see_sites" class="modal-backdrop" @click.self="closeModal">
         <div class="modal-container">
@@ -57,7 +57,7 @@
 
             <div v-if="isValidating" class="loading-state">
               <Icon name="svg-spinners:90-ring-with-bg" size="32" />
-              <span>{{ t('checking_coverage') }}</span>
+              <span>Verificando cobertura...</span>
             </div>
 
             <div
@@ -85,13 +85,13 @@
                   <strong>{{ tempSiteData.distance_miles }} {{ t('km') }}</strong>
                 </div>
                 <div class="detail-row full">
-                  <span>{{ t('ships_from_site') }} </span>
-                  <strong> {{ tempSiteData.nearest?.site?.site_name }}</strong>
+                  <span>{{ t('ships_from_site') }}</span>
+                  <strong>{{ tempSiteData.nearest?.site?.site_name }}</strong>
                 </div>
               </div>
 
               <div v-else class="error-message">
-                <p>{{ isEnglish ? tempSiteData.error?.message_en : tempSiteData.error?.message_es }}</p>
+                <p>{{ lang === 'en' ? tempSiteData.error?.message_en : tempSiteData.error?.message_es }}</p>
               </div>
             </div>
           </div>
@@ -134,17 +134,17 @@
                   v-model="orderTypeIdStr"
                   class="hidden-radio"
                 />
-                <span class="tab-label">{{ displayOrderTypeName(opt) }}</span>
+                <span class="tab-label">{{ opt.name }}</span>
               </label>
             </div>
           </div>
           <div v-else class="card" style="text-align:center; color: #666;">
-            <p>{{ t('loading_delivery_options') }}</p>
+            <p>{{ lang === 'en' ? 'Loading delivery options...' : 'Cargando opciones de entrega...' }}</p>
           </div>
 
           <!-- ================== DATOS PERSONALES ================== -->
           <section class="card form-section">
-            <h2 class="section-title">{{ t('personal_data') }}</h2>
+            <h2 class="section-title">Datos Personales</h2>
 
             <div class="form-row">
               <div class="form-group full">
@@ -161,7 +161,7 @@
                   <div class="country-select" v-click-outside="() => (showCountryDropdown = false)">
                     <button type="button" class="country-trigger" @click="toggleCountryDropdown">
                       <img v-if="user.user.phone_code?.flag" :src="user.user.phone_code.flag" alt="flag" />
-                      <span>{{ user.user.phone_code?.dialCode || (isEnglish ? '+1' : '+57') }}</span>
+                      <span>{{ user.user.phone_code?.dialCode || '+57' }}</span>
                       <Icon name="mdi:chevron-down" size="14" />
                     </button>
 
@@ -188,7 +188,7 @@
                     class="input-modern input-phone"
                     v-model="user.user.phone_number"
                     @blur="formatPhoneOnBlur"
-                    :placeholder="t('phone_placeholder')"
+                    :placeholder="'300 000 0000'"
                   />
                 </div>
 
@@ -206,14 +206,14 @@
           <section class="card form-section">
             <h2 class="section-title">
               {{
-                [2, 6].includes(user.user.order_type?.id)
-                  ? (user.user.order_type?.id === 6 ? t('in_store') : t('site_recoger'))
+                isPickup
+                  ? (user.user.order_type?.id === 6 ? 'EN EL LOCAL' : t('site_recoger'))
                   : t('address')
               }}
             </h2>
 
             <!-- DELIVERY -->
-            <div v-if="!user.user.order_type || ![2, 6].includes(user.user.order_type.id)" class="address-selector">
+            <div v-if="!isPickup" class="address-selector">
               <div
                 class="address-card"
                 :class="{ 'has-address': user.user.address, 'no-address': !user.user.address }"
@@ -232,12 +232,11 @@
                       {{
                         siteStore?.location?.neigborhood?.delivery_price != null
                           ? formatCOP(siteStore.location.neigborhood.delivery_price)
-                          : t('free_shipping')
+                          : (lang === 'en' ? 'Free Shipping' : 'Envío Gratis')
                       }}
                     </span>
-
                     <span v-if="siteStore?.location?.site?.site_name" class="site-name">
-                      • {{ t('from') }} {{ siteStore.location.site.site_name }}
+                      • {{ lang === 'en' ? 'From' : 'Desde' }} {{ siteStore.location.site.site_name }}
                     </span>
                   </div>
                 </div>
@@ -248,9 +247,9 @@
               </div>
             </div>
 
-            <!-- PICKUP -->
+            <!-- PICKUP / ESTOY AQUÍ -->
             <div v-else class="address-selector">
-              <div class="address-card has-address" @click="siteStore.setVisible('currentSiteSites', true)">
+              <div class="address-card has-address" @click="openPickupDialog">
                 <div class="icon-box-addr pickup"><Icon name="mdi:store-marker" /></div>
                 <div class="addr-info">
                   <span class="addr-title">{{ siteStore?.location?.site?.site_name || t('site_selector') }}</span>
@@ -264,14 +263,14 @@
                 class="form-group mt-3"
               >
                 <label>{{ t('vehicle_plate') }}</label>
-                <InputText type="text" class="input-modern" v-model="user.user.placa" :placeholder="t('plate_placeholder')" />
+                <InputText type="text" class="input-modern" v-model="user.user.placa" placeholder="ABC-123" />
               </div>
             </div>
           </section>
 
           <!-- ================== PAGO & DETALLES ================== -->
           <section class="card form-section">
-            <h2 class="section-title">{{ t('payment_details') }}</h2>
+            <h2 class="section-title">Pago & Detalles</h2>
 
             <!-- ✅ CUPONES -->
             <div class="coupon-wrapper">
@@ -299,7 +298,6 @@
                     class="btn-coupon remove"
                     @click="clearCoupon"
                     type="button"
-                    :title="t('remove_coupon')"
                   >
                     <Icon name="mdi:trash-can-outline" />
                   </button>
@@ -311,7 +309,11 @@
                     :disabled="!temp_discount || isApplyingCoupon"
                     type="button"
                   >
-                    {{ isApplyingCoupon ? t('applying') : t('apply') }}
+                    {{
+                      isApplyingCoupon
+                        ? (lang === 'en' ? 'Applying...' : 'Aplicando...')
+                        : (lang === 'en' ? 'Apply' : 'Aplicar')
+                    }}
                   </button>
                 </div>
 
@@ -324,12 +326,11 @@
                   <div class="feedback-info">
                     <template v-if="temp_code.status === 'active'">
                       <span class="discount-title">{{ temp_code.discount_name }}</span>
-
                       <span class="discount-amount" v-if="temp_code.amount">
-                        {{ t('you_save') }}: <strong>{{ formatCOP(temp_code.amount) }}</strong>
+                        Ahorras: <strong>{{ formatCOP(temp_code.amount) }}</strong>
                       </span>
                       <span class="discount-amount" v-else-if="temp_code.percent">
-                        {{ t('you_save') }}: <strong>{{ temp_code.percent }}%</strong>
+                        Ahorras: <strong>{{ temp_code.percent }}%</strong>
                       </span>
                     </template>
 
@@ -337,8 +338,8 @@
                       <span>
                         {{
                           temp_code.status === 'invalid_site'
-                            ? t('coupon_invalid_site')
-                            : (temp_code.detail || t('invalid_code'))
+                            ? (lang === 'en' ? 'Not valid for this site' : 'No válido en esta sede')
+                            : (temp_code.detail || (lang === 'en' ? 'Invalid code' : 'Código no válido'))
                         }}
                       </span>
                     </template>
@@ -355,16 +356,9 @@
                 v-model="user.user.payment_method_option"
                 :options="computedPaymentOptions"
                 optionLabel="name"
-                :placeholder="t('select_option')"
+                placeholder="Selecciona una opción"
                 class="pv-select pv-select-payment input-modern with-icon"
-              >
-                <template #value="{ value, placeholder }">
-                  <span>{{ value ? displayPaymentMethodName(value) : placeholder }}</span>
-                </template>
-                <template #option="{ option }">
-                  <span>{{ displayPaymentMethodName(option) }}</span>
-                </template>
-              </Select>
+              />
             </div>
 
             <div class="form-group" style="margin-top: 1rem;">
@@ -374,7 +368,7 @@
                 rows="3"
                 v-model="store.order_notes"
                 :placeholder="t('additional_notes')"
-              />
+              ></Textarea>
             </div>
           </section>
         </div>
@@ -386,7 +380,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import resumen from '../resumen.vue'
 import { usecartStore, useSitesStore, useUserStore } from '#imports'
 import { URI } from '~/service/conection'
@@ -439,12 +433,6 @@ const getErrorDetail = (payload) => {
   return null
 }
 
-const pickByLang = (esValue, enValue) => {
-  const es = String(esValue || '')
-  const en = String(enValue || '')
-  return isEnglish.value ? (en || es) : (es || en)
-}
-
 /* ================= Config ================= */
 const uri_api_google = 'https://api.locations.salchimonster.com'
 const sitePaymentsComplete = ref([])
@@ -454,132 +442,124 @@ const MAIN_DOMAIN = 'salchimonster.com'
 const isRedirecting = ref(false)
 const targetSiteName = ref('')
 
-/* ================= i18n (DESDE STORE) ================= */
-const lang = computed(() => {
-  const raw = (user?.lang?.name || user?.user?.lang?.name || 'es').toString().toLowerCase()
-  return raw === 'en' ? 'en' : 'es'
-})
-const isEnglish = computed(() => lang.value === 'en')
+/* ================= Pickup (RECIBIR / ESTOY AQUÍ) ================= */
+const isPickup = computed(() => [2, 6].includes(Number(user.user.order_type?.id)))
+
+const openPickupDialog = async () => {
+  // tu dialog ya está montado en App y escucha: store.visibles.site_recoger
+  // (y NO usamos el modal google)
+  await nextTick()
+  siteStore.setVisible('site_recoger', true)
+}
+
+// ✅ cuando cambie el tipo de orden a recoger / estoy aquí -> abre dialog automáticamente
+watch(
+  () => user.user.order_type?.id,
+  async (id) => {
+    const isPk = [2, 6].includes(Number(id))
+
+    if (isPk) {
+      // si no hay sede seleccionada, o si quieres forzar siempre, deja este if como true
+      if (!siteStore.location?.site?.site_id) {
+        openPickupDialog()
+      } else {
+        // igual lo puedes abrir siempre si prefieres:
+        // openPickupDialog()
+      }
+
+      // para pickup: address debe ser la sede (no google)
+      user.user.site = siteStore.location?.site || user.user.site
+      user.user.address = siteStore.location?.site?.site_address || siteStore.location?.site?.site_name || user.user.address
+
+      // limpiar datos google si quieres evitar mezclas
+      user.user.lat = null
+      user.user.lng = null
+      user.user.place_id = null
+      user.user.site = siteStore.location?.site
+    } else {
+      // si vuelven a delivery, no mostrar dialog de recoger
+      siteStore.setVisible('site_recoger', false)
+    }
+  },
+  { immediate: true }
+)
+
+// ✅ si el usuario elige sede desde el dialog, reflejarlo en el user cuando está en pickup
+watch(
+  () => siteStore.location?.site?.site_id,
+  () => {
+    if (!isPickup.value) return
+    user.user.site = siteStore.location?.site
+    user.user.address = siteStore.location?.site?.site_address || siteStore.location?.site?.site_name || ''
+  }
+)
+
+/* ================= i18n ================= */
+const lang = computed(() =>
+  (user?.lang?.name || 'es').toString().toLowerCase() === 'en' ? 'en' : 'es'
+)
 
 const DICT = {
   es: {
     finalize_purchase: 'Finalizar Compra',
-    loading_delivery_options: 'Cargando opciones de entrega...',
-    redirect_taking_you_to: 'Te estamos llevando a',
-    redirect_transferring_order: 'Transfiriendo tu pedido...',
-
-    personal_data: 'Datos Personales',
-    payment_details: 'Pago & Detalles',
-
     name: 'Nombre Completo',
     phone: 'Celular',
-    phone_placeholder: '300 000 0000',
-    email: 'Correo Electrónico',
-
     site_recoger: 'Sede para Recoger',
-    in_store: 'En el Local',
-    address: 'Dirección de Entrega',
-
+    payment_method: 'Método de Pago',
+    notes: 'Notas del pedido',
+    code: '¿Tienes un cupón?',
     site_selector: 'Seleccionar ubicación',
     address_placeholder: 'Buscar dirección (Ej: Calle 123...)',
-
     in_coverage: '¡Estás en zona de cobertura!',
     not_in_coverage: 'Fuera de cobertura',
-    checking_coverage: 'Verificando cobertura...',
-
     distance: 'Distancia',
     km: 'km',
-    ships_from_site: 'Te enviamos desde',
+    ships_from_site: 'Te enviamos desde ',
     delivery_price: 'Costo Domicilio',
-
     cancel: 'Cancelar',
     save: 'Confirmar ubicación',
-
+    email: 'Correo Electrónico',
     vehicle_plate: 'Placa del vehículo',
-    plate_placeholder: 'ABC-123',
-
-    notes: 'Notas del pedido',
     additional_notes: 'Ej: Timbre dañado, dejar en portería...',
-    payment_method: 'Método de Pago',
-    select_option: 'Selecciona una opción',
-
-    code: '¿Tienes un cupón?',
-    code_placeholder: 'Ingresa el código',
-    apply: 'Aplicar',
-    applying: 'Aplicando...',
-    remove_coupon: 'Quitar cupón',
-    you_save: 'Ahorras',
-    invalid_code: 'Código no válido',
-    coupon_invalid_site: 'No válido en esta sede',
-
     search_country_or_code: 'Buscar país...',
-    free_shipping: 'Envío Gratis',
-    from: 'Desde'
+    address: 'Dirección de Entrega',
+    code_placeholder: 'Ingresa el código'
   },
   en: {
     finalize_purchase: 'Checkout',
-    loading_delivery_options: 'Loading delivery options...',
-    redirect_taking_you_to: 'Taking you to',
-    redirect_transferring_order: 'Transferring your order...',
-
-    personal_data: 'Personal Details',
-    payment_details: 'Payment & Details',
-
     name: 'Full Name',
     phone: 'Mobile Phone',
-    phone_placeholder: '300 000 0000',
-    email: 'Email',
-
     site_recoger: 'Pickup Location',
-    in_store: 'In Store',
-    address: 'Delivery Address',
-
+    payment_method: 'Payment Method',
+    notes: 'Order Notes',
+    code: 'Have a coupon?',
     site_selector: 'Select Location',
     address_placeholder: 'Search address...',
-
     in_coverage: 'Great! In coverage area',
     not_in_coverage: 'Out of coverage',
-    checking_coverage: 'Checking coverage...',
-
     distance: 'Distance',
     km: 'km',
     ships_from_site: 'Shipping from',
     delivery_price: 'Delivery Fee',
-
     cancel: 'Cancel',
     save: 'Confirm Location',
-
+    email: 'Email',
     vehicle_plate: 'Vehicle Plate',
-    plate_placeholder: 'ABC-123',
-
-    notes: 'Order Notes',
     additional_notes: 'Ex: Doorbell broken...',
-    payment_method: 'Payment Method',
-    select_option: 'Select an option',
-
-    code: 'Have a coupon?',
-    code_placeholder: 'Enter code',
-    apply: 'Apply',
-    applying: 'Applying...',
-    remove_coupon: 'Remove coupon',
-    you_save: 'You save',
-    invalid_code: 'Invalid code',
-    coupon_invalid_site: 'Not valid for this site',
-
     search_country_or_code: 'Search country...',
-    free_shipping: 'Free Shipping',
-    from: 'From'
+    address: 'Delivery Address',
+    code_placeholder: 'Enter code'
   }
 }
 const t = (key) => DICT[lang.value]?.[key] || DICT.es[key] || key
 
 const formatCOP = (v) =>
   v === 0
-    ? (isEnglish.value ? 'Free' : 'Gratis')
+    ? 'Gratis'
     : new Intl.NumberFormat(lang.value === 'en' ? 'en-CO' : 'es-CO', {
         style: 'currency',
         currency: 'COP',
-        maximumFractionDigits:2
+        maximumFractionDigits: 0
       }).format(v)
 
 /* ================= Modal Google ================= */
@@ -669,7 +649,7 @@ const onAddressSelect = async (item) => {
   }
 }
 
-/* ================= Confirm / Redirect ================= */
+/* ================= Confirm / Redirect (GOOGLE DELIVERY) ================= */
 const confirmSelection = async () => {
   if (!tempSiteData.value?.in_coverage) return
 
@@ -692,6 +672,7 @@ const applySiteSelection = (data) => {
   user.user.lng = data.lng
   user.user.place_id = data.place_id
 
+  // sitio real
   siteStore.location.site = data.nearest?.site || siteStore.location.site
   store.address_details = data
 
@@ -705,7 +686,7 @@ const applySiteSelection = (data) => {
 const handleSiteChange = async (newData) => {
   isRedirecting.value = true
   const site = newData.nearest?.site
-  targetSiteName.value = site?.site_name || (isEnglish.value ? 'New Location' : 'Nueva Sede')
+  targetSiteName.value = site?.site_name || 'Nueva Sede'
 
   try {
     const hash = generateUUID()
@@ -734,7 +715,7 @@ const handleSiteChange = async (newData) => {
 
     const subdomain = site?.subdomain
     if (!subdomain) {
-      alert(isEnglish.value ? 'Sorry, this location has no web address.' : 'Lo sentimos, no pudimos localizar la dirección web de esta sede.')
+      alert('Lo sentimos, no pudimos localizar la dirección web de esta sede.')
       isRedirecting.value = false
       return
     }
@@ -748,7 +729,7 @@ const handleSiteChange = async (newData) => {
     window.location.href = targetUrl
   } catch (error) {
     console.error('Error switching site:', error)
-    alert(isEnglish.value ? 'Error switching location. Please try again.' : 'Ocurrió un error al cambiar de sede. Intenta nuevamente.')
+    alert('Ocurrió un error al cambiar de sede. Intenta nuevamente.')
     isRedirecting.value = false
   }
 }
@@ -818,7 +799,7 @@ watch(
       user.user.phone_e164 = phone.number
     } else {
       user.user.phone_e164 = null
-      phoneError.value = isEnglish.value ? 'Invalid phone number' : 'Número inválido'
+      phoneError.value = lang.value === 'en' ? 'Invalid phone number' : 'Número inválido'
     }
   },
   { immediate: true }
@@ -832,10 +813,6 @@ const computedOrderTypesVisible = computed(() => {
   if (!siteConfig || !siteConfig.order_types) return []
   return siteConfig.order_types.filter((ot) => ot.methods && ot.methods.length > 0)
 })
-
-const displayOrderTypeName = (opt) => {
-  return pickByLang(opt?.name, opt?.english_name || opt?.name_en || '')
-}
 
 const orderTypeIdStr = computed({
   get: () => (user.user.order_type?.id ? String(user.user.order_type.id) : null),
@@ -853,41 +830,77 @@ const computedPaymentOptions = computed(() => {
   return selectedOrderType?.methods || []
 })
 
-const displayPaymentMethodName = (m) => {
-  return pickByLang(m?.name, m?.english_name || m?.name_en || '')
-}
-
 const ensureValidOrderTypeForCurrentSite = () => {
   const list = computedOrderTypesVisible.value
   if (list.length === 0) {
     user.user.order_type = null
     return
   }
+
   const currentId = user.user.order_type?.id
-  if (!currentId || !list.some((o) => Number(o.id) === Number(currentId))) {
-    user.user.order_type = list[0]
+  if (currentId && list.some((o) => Number(o.id) === Number(currentId))) return
+
+  const hasDeliveryAddress =
+    !!user.user.address || !!user.user.site?.formatted_address || !!store.address_details?.formatted_address
+
+  const preferred =
+    hasDeliveryAddress
+      ? list.find((o) => ![2, 6].includes(Number(o.id)))
+      : list[0]
+
+  user.user.order_type = preferred || list[0]
+}
+
+function syncDeliveryPrice() {
+  const isPickupLocal = [2, 6].includes(user.user.order_type?.id)
+
+  if (!siteStore.location.neigborhood) {
+    siteStore.location.neigborhood = {
+      name: '',
+      delivery_price: 0,
+      neighborhood_id: null,
+      id: null,
+      site_id: null
+    }
   }
+
+  if (isPickupLocal) {
+    siteStore.location.neigborhood.delivery_price = 0
+    siteStore.current_delivery = 0
+    return
+  }
+
+  const cost =
+    user.user.site?.delivery_cost_cop ??
+    store.address_details?.delivery_cost_cop ??
+    siteStore.current_delivery ??
+    siteStore.location.neigborhood.delivery_price ??
+    0
+
+  siteStore.location.neigborhood.delivery_price = cost
+  siteStore.current_delivery = cost
 }
 
 watch(
-  () => user.user.order_type,
-  (newType) => {
-    if (newType?.id === 2 || newType?.id === 6) {
-      siteStore.location.neigborhood.delivery_price = 0
-    } else {
-      const cost = user.user.site?.delivery_cost_cop ?? siteStore?.delivery_price
-      if (cost != null) siteStore.location.neigborhood.delivery_price = cost
-    }
+  () => [
+    user.user.order_type?.id,
+    user.user.site?.delivery_cost_cop,
+    store.address_details?.delivery_cost_cop,
+    siteStore.current_delivery
+  ],
+  () => {
+    syncDeliveryPrice()
 
     const currentMethodId = user.user.payment_method_option?.id
     const availableMethods = computedPaymentOptions.value
     if (!availableMethods.some((m) => m.id === currentMethodId)) {
       user.user.payment_method_option = null
     }
-  }
+  },
+  { immediate: true }
 )
 
-/* ================= CUPONES (FIX) ================= */
+/* ================= CUPONES ================= */
 const have_discount = computed({
   get: () => !!store.coupon_ui?.enabled,
   set: (v) => store.setCouponUi({ enabled: !!v })
@@ -921,7 +934,7 @@ watch(
       temp_code.value = {
         ...newCoupon,
         status: 'active',
-        discount_name: newCoupon.discount_name || newCoupon.name || (isEnglish.value ? 'Discount' : 'Descuento')
+        discount_name: newCoupon.discount_name || newCoupon.name || 'Descuento'
       }
     } else {
       temp_code.value = {}
@@ -936,15 +949,15 @@ watch(
     if (store.applied_coupon?.code) {
       await validateDiscount(store.applied_coupon.code, { silent: true })
     }
-    ensureValidOrderTypeForCurrentSite()
   }
 )
 
 const validateDiscount = async (code, opts = { silent: false }) => {
+  const silent = !!opts?.silent
   const site = siteStore.location?.site
 
   if (!site) {
-    temp_code.value = { status: 'error', detail: isEnglish.value ? 'Select a site first' : 'Selecciona una sede primero' }
+    temp_code.value = { status: 'error', detail: lang.value === 'en' ? 'Select a site first' : 'Selecciona una sede primero' }
     return
   }
 
@@ -958,20 +971,20 @@ const validateDiscount = async (code, opts = { silent: false }) => {
 
     const backendDetail = getErrorDetail(payload)
     if (!r.ok || backendDetail) {
-      temp_code.value = { status: 'invalid', detail: backendDetail || t('invalid_code') }
+      temp_code.value = { status: 'invalid', detail: backendDetail || (lang.value === 'en' ? 'Invalid code' : 'Código no válido') }
       store.removeCoupon()
       return
     }
 
     const coupon = pickCoupon(payload)
     if (!coupon) {
-      temp_code.value = { status: 'invalid', detail: t('invalid_code') }
+      temp_code.value = { status: 'invalid', detail: lang.value === 'en' ? 'Invalid code' : 'Código no válido' }
       store.removeCoupon()
       return
     }
 
     if (Array.isArray(coupon.sites) && !coupon.sites.some((s) => String(s.site_id) === String(site.site_id))) {
-      temp_code.value = { status: 'invalid_site', detail: t('coupon_invalid_site') }
+      temp_code.value = { status: 'invalid_site', detail: lang.value === 'en' ? 'Not valid for this site' : 'No válido en esta sede' }
       store.removeCoupon()
       return
     }
@@ -980,14 +993,14 @@ const validateDiscount = async (code, opts = { silent: false }) => {
     temp_code.value = {
       ...coupon,
       status: 'active',
-      discount_name: coupon.discount_name || coupon.name || (isEnglish.value ? 'Discount' : 'Descuento')
+      discount_name: coupon.discount_name || coupon.name || 'Descuento'
     }
 
     store.setCouponUi({ enabled: true, draft_code: coupon.code || finalCode })
   } catch (e) {
     console.error(e)
-    temp_code.value = { status: 'error', detail: isEnglish.value ? 'Connection error' : 'Error de conexión' }
-    store.removeCoupon()
+    temp_code.value = { status: 'error', detail: lang.value === 'en' ? 'Connection error' : 'Error de conexión' }
+    if (!silent) store.removeCoupon()
   } finally {
     isApplyingCoupon.value = false
   }
@@ -1002,9 +1015,8 @@ const clearCoupon = () => {
 /* ================= Mount ================= */
 onMounted(async () => {
   initCountries()
-
   if (!user.user.phone_code) {
-    const defaultCode = isEnglish.value ? 'US' : 'CO'
+    const defaultCode = lang.value === 'en' ? 'US' : 'CO'
     user.user.phone_code = countries.value.find((c) => c.code === defaultCode)
   }
 
@@ -1020,8 +1032,8 @@ onMounted(async () => {
 watch(lang, initCountries)
 </script>
 
-
 <style scoped>
+/* (tu CSS igual, lo dejé tal cual) */
 /* =========================================
    VARIABLES & TEMA
    ========================================= */
@@ -1129,11 +1141,7 @@ watch(lang, initCountries)
 
 label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
 
-.input-modern {
-  width: 100%;
- 
-}
-.input-modern:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
+.input-modern { width: 100%; }
 textarea.input-modern { resize: vertical; min-height: 80px; }
 
 /* Selector Teléfono */
@@ -1189,7 +1197,6 @@ textarea.input-modern { resize: vertical; min-height: 80px; }
   font-size: 1.2rem; color: #666;
 }
 .has-address .icon-box-addr { background: #000; color: #fff; }
-.pickup .icon-box-addr { background: #000; color: #fff; }
 
 .addr-info { flex: 1; display: flex; flex-direction: column; }
 .addr-title { font-weight: 600; font-size: 0.95rem; }
@@ -1228,11 +1235,6 @@ textarea.input-modern { resize: vertical; min-height: 80px; }
 .feedback-info { display: flex; flex-direction: column; }
 .discount-title { font-weight: 700; color: #065f46; font-size: 0.9rem; text-transform: uppercase; }
 .discount-amount { font-size: 0.85rem; color: #047857; margin-top: 2px; }
-
-.select-wrapper { position: relative; }
- 
-.select-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none; }
-.select-arrow { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2rem; }
 
 /* =========================================
    MODAL DE DIRECCIÓN

@@ -60,7 +60,7 @@ const shouldUseGoogleMaps = computed(() => {
     </div>
 
     <div v-else>
-      <paycGoogle  />
+      <paycGoogle />
       <!-- <paycBarrios v-else /> -->
     </div>
 

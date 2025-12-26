@@ -49,7 +49,7 @@ const currentCountry = computed(() => {
 // 🌍 TRADUCCIONES (sidebar)
 // =========================================
 const tSidebar = computed(() => {
-  const langKey = (user.lang?.name || 'es').toLowerCase()
+  const langKey = (user.lang?.name || 'us').toLowerCase()
   return texts[langKey]?.sidebar || {}
 })
 
@@ -78,7 +78,7 @@ const fetchPosts = async () => {
 // 🔹 Menú de Navegación
 // =========================================
 const menus = computed(() => {
-  const langKey = (user.lang?.name || 'es').toLowerCase()
+  const langKey = (user.lang?.name || 'us').toLowerCase()
   const t = texts[langKey]?.menus || {}
 
   return [
@@ -88,8 +88,8 @@ const menus = computed(() => {
     { label: t.rastrear || 'Rastrear', to: `/rastrear`, icon: 'mdi:map-clock' },
     { label: t.ayuda || 'Ayuda', to: `/pqr`, icon: 'mdi:lifebuoy' },
     // { label: t.fraquicias || 'Franquicias', to: `/franquicias`, icon: 'mdi:lifebuoy' },
-    // { label: t.colaboraciones || 'Colaboraciones', to: `/colaboraciones`, icon: 'mdi:handshake' },
-    // { label: t.sonando || 'Sonando', to: `/sonando`, icon: 'mdi:music-circle' }
+    { label: t.colaboraciones || 'Colaboraciones', to: `/colaboraciones`, icon: 'mdi:handshake' },
+    { label: t.sonando || 'Sonando', to: `/sonando`, icon: 'mdi:music-circle' }
   ]
 })
 

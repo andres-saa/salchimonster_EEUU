@@ -46,7 +46,7 @@ export const useUserStore = defineStore(
     // persistencia al estilo pinia-plugin-persistedstate
     persist: {
       key: 'user',
-      paths: ['user', 'lang'],
+      paths: ['user'],
       // si usas @pinia-plugin-persistedstate/nuxt puedes agregar:
       // storage: persistedState.localStorage,
     },
