@@ -61,7 +61,11 @@
                 {{ formatName(additionDisplayName(item)) }}
               </div>
               <div v-if="item.pedido_precio > 0" class="addition-price">
-                {{ formatoPesosColombianos(item.pedido_precio * item.modificadorseleccion_cantidad * product.pedido_cantidad) }}
+                {{
+                  formatoPesosColombianos(
+                    item.pedido_precio * item.modificadorseleccion_cantidad * product.pedido_cantidad
+                  )
+                }}
               </div>
             </div>
           </div>
@@ -81,11 +85,10 @@
           <span class="value discount">- {{ formatoPesosColombianos(store.cartTotalDiscount) }}</span>
         </div>
 
+        <!-- ✅ DOMICILIO: NUNCA 0 SI ES DELIVERY -->
         <div class="total-row" v-if="siteStore?.location?.site?.site_id != 33">
           <div class="label-wrapper">
-            <span class="label" :class="{ 'strike': deliveryPrice === 0 && !isEditingDelivery }">
-              {{ t('delivery') }}
-            </span>
+            <span class="label">{{ t('delivery') }}</span>
 
             <button
               v-if="isLoggedIn"
@@ -99,18 +102,36 @@
 
           <div class="value">
             <div v-if="isEditingDelivery">
-              <input type="number" v-model.number="deliveryPrice" />
+              <input
+                type="number"
+                class="delivery-input"
+                v-model="deliveryEditRaw"
+                :min="isPickup ? 0 : 1"
+                inputmode="numeric"
+              />
+              <div v-if="deliveryError" class="field-error" style="margin-top:.35rem;">
+                {{ deliveryError }}
+              </div>
             </div>
 
             <div v-else>
-              <template v-if="siteStore.location.neigborhood.delivery_price === 0">
+              <!-- Pickup / estoy en sede => 0 permitido -->
+              <template v-if="isPickup">
                 <span class="free-delivery">
                   {{ route.path.includes('reservas') ? t('go_to_store') : t('pickup_in_store') }}
                 </span>
               </template>
 
-              <template v-else-if="siteStore.location.neigborhood.delivery_price > 0">
-                {{ formatoPesosColombianos(siteStore.location.neigborhood.delivery_price) }}
+              <!-- Delivery => debe ser >0 -->
+              <template v-else-if="deliveryPrice != null && deliveryPrice > 0">
+                {{ formatoPesosColombianos(deliveryPrice) }}
+              </template>
+
+              <!-- Delivery inválido (0 / null) -->
+              <template v-else>
+                <span class="free-delivery" style="color:#b91c1c;">
+                  {{ t('delivery_required') }}
+                </span>
               </template>
             </div>
           </div>
@@ -119,7 +140,12 @@
         <div class="total-row final-total">
           <span class="label">{{ t('total') }}</span>
           <span class="value">
-            {{ formatoPesosColombianos(store.cartTotal + (deliveryPrice || 0)) }}
+            <template v-if="canProceed">
+              {{ formatoPesosColombianos(totalToPay) }}
+            </template>
+            <template v-else>
+              --
+            </template>
           </span>
         </div>
       </div>
@@ -131,6 +157,16 @@
         >
           <i class="pi pi-clock"></i>
           {{ t('closed_opens_at') }} {{ siteStore.status.next_opening_time }}
+        </div>
+
+        <!-- ✅ Aviso extra si no puede proceder por domicilio inválido -->
+        <div
+          v-if="!canProceed"
+          class="closed-alert"
+          style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa;"
+        >
+          <i class="pi pi-exclamation-triangle"></i>
+          {{ t('delivery_required') }}
         </div>
 
         <div class="buttons-stack">
@@ -146,27 +182,41 @@
             </button>
           </NuxtLink>
 
+          <!-- Nota: dejé tu condición tal cual venía -->
           <NuxtLink
             to="/pay"
             v-if="route.path.includes('cart') && (siteStore.status?.status !== 'closed' && route.path == '/reservas')"
             class="link-wrapper"
           >
-            <button type="button" class="btn btn-primary">
+            <button type="button" class="btn btn-primary" :disabled="!canProceed">
               {{ t('order') }}
             </button>
           </NuxtLink>
 
-          <NuxtLink to="/pay" v-else-if="route.path == '/cart'" class="link-wrapper">
-            <button type="button" class="btn btn-primary">
+          <!-- /cart -> /pay: bloquear si falta domicilio en delivery -->
+          <template v-if="route.path == '/cart'">
+            <NuxtLink v-if="canProceed" to="/pay" class="link-wrapper">
+              <button type="button" class="btn btn-primary">
+                {{ t('checkout') }}
+              </button>
+            </NuxtLink>
+
+            <button v-else type="button" class="btn btn-primary" disabled>
               {{ t('checkout') }}
             </button>
-          </NuxtLink>
+          </template>
 
+          <!-- /pay: enviar orden (bloquear si falta domicilio en delivery) -->
           <button
-            v-else-if="route.path == '/pay' && !reportes.loading.visible && siteStore.status?.status !== 'closed' && (isLoggedIn || user.user.payment_method_option?.id != 9)"
+            v-else-if="
+              route.path == '/pay' &&
+              !reportes.loading.visible &&
+              siteStore.status?.status !== 'closed' &&
+              (isLoggedIn || user.user.payment_method_option?.id != 9)
+            "
             type="button"
             class="btn btn-primary"
-            :disabled="reportes.loading.visible"
+            :disabled="reportes.loading.visible || !canProceed"
             @click="orderService.sendOrder()"
           >
             <span v-if="reportes.loading.visible">{{ t('processing') }}</span>
@@ -175,11 +225,18 @@
             </span>
           </button>
 
+          <!-- /pay: pagar con tarjeta (bloquear si falta domicilio en delivery) -->
           <button
-            v-else-if="route.path == '/pay' && !reportes.loading.visible && siteStore.status?.status == 'closed' && !isLoggedIn && user.user.payment_method_option?.id == 9"
+            v-else-if="
+              route.path == '/pay' &&
+              !reportes.loading.visible &&
+              siteStore.status?.status  !== 'closed' &&
+              !isLoggedIn &&
+              user.user.payment_method_option?.id == 9
+            "
             type="button"
             class="btn btn-primary"
-            :disabled="reportes.loading.visible"
+            :disabled="reportes.loading.visible || !canProceed"
             @click="pay"
           >
             <span v-if="reportes.loading.visible">{{ t('processing') }}</span>
@@ -199,26 +256,28 @@ import { usecartStore, useSitesStore, useUserStore, useReportesStore } from '#im
 import { orderService } from '@/service/order/orderService.ts'
 import { orderServiceEpayco } from '@/service/order/orderServiceEpayco'
 import { URI, SELF_URI } from '@/service/conection'
-import { useUIStore } from '~/stores/ui'  
+import { useUIStore } from '~/stores/ui'
+
 /* --- Script ePayco --- */
 useHead({
-  script: [
-    { src: 'https://checkout.epayco.co/checkout.js', async: true, defer: true }
-  ]
+  script: [{ src: 'https://checkout.epayco.co/checkout.js', async: true, defer: true }]
 })
 
 const user = useUserStore()
+const uiStore = useUIStore()
+const reportes = useReportesStore()
+const route = useRoute()
+const store = usecartStore()
+const siteStore = useSitesStore()
+
+const order_id = ref('')
+const epaycoPublicKey = 'ad3bfbac4531d3b82ece35e36bdf320a'
 
 /* ================= i18n ================= */
-
-const uiStore = useUIStore()
-
-// ✅ Idioma: intenta tomarlo del uiStore (ajusta el campo si tu store usa otro nombre)
 const lang = computed(() =>
   (user?.lang?.name || 'es').toString().toLowerCase() === 'en' ? 'en' : 'es'
 )
 
-// ✅ Diccionario local (puedes moverlo a tu sistema global después)
 const I18N = {
   es: {
     summary: 'Resumen',
@@ -238,7 +297,9 @@ const I18N = {
     processing: 'Procesando...',
     generate_order_link: 'Generar Pedido / Link',
     pay_with_card: 'Pagar con tarjeta',
-    payment_loading_try_again: 'Cargando pasarela de pagos, intenta de nuevo en un momento...'
+    payment_loading_try_again: 'Cargando pasarela de pagos, intenta de nuevo en un momento...',
+    delivery_required: 'Selecciona una dirección válida para calcular el domicilio (no puede ser $0).',
+    invalid_delivery_value: 'En delivery el domicilio debe ser mayor a 0.'
   },
   en: {
     summary: 'Summary',
@@ -258,57 +319,114 @@ const I18N = {
     processing: 'Processing...',
     generate_order_link: 'Generate Order / Link',
     pay_with_card: 'Pay with card',
-    payment_loading_try_again: 'Loading payment gateway, please try again in a moment...'
+    payment_loading_try_again: 'Loading payment gateway, please try again in a moment...',
+    delivery_required: 'Select a valid address to calculate delivery (it cannot be $0).',
+    invalid_delivery_value: 'For delivery, the fee must be greater than 0.'
   }
 }
-
 const t = (key) => I18N[lang.value]?.[key] || I18N.es[key] || key
 
-const reportes = useReportesStore()
-const route = useRoute()
-const store = usecartStore()
-const siteStore = useSitesStore()
- 
-const order_id = ref('')
-const epaycoPublicKey = 'ad3bfbac4531d3b82ece35e36bdf320a'
+/* ================= Reglas: Pickup vs Delivery ================= */
+const isPickup = computed(() => [2, 6].includes(Number(user.user.order_type?.id)))
+const isDelivery = computed(() => !isPickup.value)
 
-// --- LÓGICA DE LOGIN Y EDICIÓN DE DOMICILIO ---
+const isValidDeliveryCost = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0
+}
+const normalizeDeliveryCost = (v) => (isValidDeliveryCost(v) ? Number(v) : null)
+
+/* ================= LOGIN & EDICIÓN DOMICILIO ================= */
 const isEditingDelivery = ref(false)
+const deliveryEditRaw = ref('') // string para input
+const deliveryError = ref('')
 
 const isLoggedIn = computed(() => {
   return !!user.user?.token && !!user.user?.inserted_by
 })
 
-const toggleEditDelivery = () => {
-  isEditingDelivery.value = !isEditingDelivery.value
-}
-
 const deliveryPrice = computed({
   get: () => {
+    // 1) neighborhood
     const nb = siteStore.location?.neigborhood
-    if (nb && nb.delivery_price != null) return Number(nb.delivery_price) || 0
+    const nbVal = nb?.delivery_price
 
+    // 2) address_details
     const ad = store.address_details || siteStore.location?.address_details
-    if (ad && ad.delivery_cost_cop != null) return Number(ad.delivery_cost_cop) || 0
+    const adVal = ad?.delivery_cost_cop
 
+    // 3) user.site
     const u = user.user?.site
-    if (u && u.delivery_cost_cop != null) return Number(u.delivery_cost_cop) || 0
+    const uVal = u?.delivery_cost_cop
 
-    return 0
+    // Pickup => 0 siempre
+    if (isPickup.value) return 0
+
+    // Delivery => solo >0, si no => null
+    const candidate = nbVal ?? adVal ?? uVal ?? null
+    return normalizeDeliveryCost(candidate)
   },
   set: (v) => {
     if (!siteStore.location.neigborhood) siteStore.location.neigborhood = {}
-    siteStore.location.neigborhood.delivery_price = Math.max(0, Number(v) || 0)
+    if (isPickup.value) {
+      siteStore.location.neigborhood.delivery_price = 0
+      siteStore.current_delivery = 0
+      return
+    }
+    const normalized = normalizeDeliveryCost(v)
+    siteStore.location.neigborhood.delivery_price = normalized
+    siteStore.current_delivery = normalized
   }
 })
 
+const toggleEditDelivery = () => {
+  deliveryError.value = ''
+
+  // Entrando a edición: precarga el valor actual
+  if (!isEditingDelivery.value) {
+    deliveryEditRaw.value =
+      deliveryPrice.value != null ? String(deliveryPrice.value) : ''
+    isEditingDelivery.value = true
+    return
+  }
+
+  // Guardando
+  const typed = Number(deliveryEditRaw.value)
+  if (isPickup.value) {
+    deliveryPrice.value = 0
+    isEditingDelivery.value = false
+    return
+  }
+
+  if (!isValidDeliveryCost(typed)) {
+    deliveryError.value = t('invalid_delivery_value')
+    return
+  }
+
+  deliveryPrice.value = typed
+  isEditingDelivery.value = false
+}
+
+/* ================= Totales / Candado de pago ================= */
+const canProceed = computed(() => {
+  // pickup => ok (0 permitido)
+  if (isPickup.value) return true
+  // delivery => debe existir y ser >0
+  return deliveryPrice.value != null && deliveryPrice.value > 0
+})
+
+const totalToPay = computed(() => {
+  const d = isPickup.value ? 0 : (deliveryPrice.value ?? 0)
+  return store.cartTotal + d
+})
+
+/* ================= Nombres multi-idioma ================= */
 const formatName = (str) => {
   if (!str) return ''
   const lower = String(str).toLowerCase()
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
 
-// ✅ Nombres multi-idioma (usa english_name con fallback)
 const productDisplayName = (product) => {
   if (!product) return ''
   const esName = product.pedido_nombre_producto || ''
@@ -316,7 +434,6 @@ const productDisplayName = (product) => {
   return lang.value === 'en' ? (enName || esName) : esName
 }
 
-// ✅ Por si combos/adiciones también traen english_name (si no, cae al nombre normal)
 const comboDisplayName = (comboItem) => {
   if (!comboItem) return ''
   const esName = comboItem.pedido_nombre || ''
@@ -331,17 +448,41 @@ const additionDisplayName = (item) => {
   return lang.value === 'en' ? (enName || esName) : esName
 }
 
+/* ================= Init domicilio (sin dejarlo en 0 si es delivery) ================= */
 onMounted(() => {
-  if (user.user.payment_method_option?.id != 7 && !route.path.includes('reservas')) {
-    siteStore.setNeighborhoodPrice()
-  } else {
+  if (isPickup.value) {
     siteStore.setNeighborhoodPriceCero()
+  } else {
+    // evita que quede 0: si el store pone 0 por default, luego el computed lo vuelve null
+    siteStore.setNeighborhoodPrice()
   }
 })
 
+watch(
+  () => user.user.order_type?.id,
+  () => {
+    // si cambia a pickup => fuerza 0
+    if (isPickup.value) {
+      deliveryPrice.value = 0
+      return
+    }
+    // si cambia a delivery y estaba 0 => deja null (no puede proceder)
+    if (deliveryPrice.value === 0) {
+      deliveryPrice.value = null
+    }
+  },
+  { immediate: true }
+)
+
 watch(() => store.cart, () => {}, { deep: true })
 
+/* ================= Pagos ================= */
 const pay = async () => {
+  if (!canProceed.value) {
+    alert(t('delivery_required'))
+    return
+  }
+
   if (typeof window !== 'undefined' && !window.ePayco) {
     console.warn('El SDK de ePayco aun no ha cargado.')
     alert(t('payment_loading_try_again'))
@@ -349,11 +490,14 @@ const pay = async () => {
   }
 
   order_id.value = await orderServiceEpayco.sendOrder()
-  // if (!order_id.value) return
-  // payWithEpayco(order_id.value)
 }
 
 const payWithEpayco = (id) => {
+  if (!canProceed.value) {
+    alert(t('delivery_required'))
+    return
+  }
+
   if (typeof window === 'undefined' || !window.ePayco) {
     console.error('ePayco SDK no cargado')
     return
@@ -366,7 +510,7 @@ const payWithEpayco = (id) => {
     onClosed: () => console.log('Modal cerrado')
   })
 
-  const totalAPagar = store.cartTotal + (deliveryPrice.value || 0)
+  const totalAPagar = totalToPay.value
 
   handler.open({
     name: id,
@@ -375,7 +519,7 @@ const payWithEpayco = (id) => {
     currency: siteStore?.location?.site?.time_zone === 'America/New_York' ? 'usd' : 'cop',
     invoice: id,
     country: 'co',
-    lang: lang.value, // ✅ antes estaba fijo en 'es'
+    lang: lang.value,
     external: 'false',
     confirmation: `${URI}/confirmacion-epayco`,
     response: `${SELF_URI}/gracias-epayco`,
@@ -498,7 +642,6 @@ const payWithEpayco = (id) => {
 .value { font-weight: 600; }
 
 .discount { color: var(--success-text); }
-.strike { text-decoration: line-through; opacity: 0.6; }
 .free-delivery { color: var(--success-text); font-weight: 700; font-size: 0.8rem; }
 
 .final-total {
@@ -557,6 +700,12 @@ const payWithEpayco = (id) => {
 }
 .delivery-input[type=number] {
   -moz-appearance: textfield;
+}
+
+.field-error {
+  font-size: 0.8rem;
+  color: #b91c1c;
+  display: block;
 }
 
 /* --- Botones --- */
