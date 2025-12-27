@@ -437,7 +437,7 @@ const getErrorDetail = (payload) => {
 /* ================= Config ================= */
 const uri_api_google = 'https://api.locations.salchimonster.com'
 const sitePaymentsComplete = ref([])
-const MAIN_DOMAIN = 'salchimonster.es'
+const MAIN_DOMAIN = 'usa.salchimonster.com'
 
 /* ================= Redirect overlay ================= */
 const isRedirecting = ref(false)

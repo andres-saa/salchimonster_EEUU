@@ -4,11 +4,25 @@
     modal
     v-model:visible="store.visibles.site_recoger"
   >
+    <!-- OVERLAY REDIRECCIÓN -->
+    <Transition name="fade">
+      <div v-if="isRedirecting" class="redirect-overlay">
+        <div class="redirect-content">
+          <div class="redirect-spinner">
+            <span class="rocket">🚀</span>
+            <div class="pulse-ring"></div>
+          </div>
+
+          <h2 class="redirect-title">Te estamos llevando a</h2>
+          <h3 class="redirect-store">{{ targetSiteName || 'Nueva sede' }}</h3>
+          <p class="redirect-subtitle">Transfiriendo tu ubicación...</p>
+        </div>
+      </div>
+    </Transition>
+
     <div>
       <div class="modal-body">
-        <!-- ================== CIUDAD FIJA ================== -->
-         
-        <!-- ================== BARRIO (SOLO) ================== -->
+        <!-- ================== BARRIO / SEDE ================== -->
         <div v-if="currentCity?.city_id" class="form-group fade-in">
           <label>Selecciona una sede</label>
 
@@ -57,9 +71,9 @@
     <template #footer>
       <button
         @click="confirmLocation"
-        :disabled="!canSave"
+        :disabled="!canSave || isRedirecting"
         class="native-btn"
-        :class="{ 'btn-disabled': !canSave }"
+        :class="{ 'btn-disabled': !canSave || isRedirecting }"
       >
         Confirmar Ubicación
       </button>
@@ -76,9 +90,7 @@ import { URI } from '@/service/conection'
 
 /**
  * ✅ IMPORTANTE:
- * Como lo estás llamando así:
  * <SiteDialogRecoger :city_id="15" />
- * entonces el prop DEBE llamarse "city_id" (con underscore).
  */
 const props = defineProps({
   city_id: { type: [Number, String], required: true },
@@ -86,7 +98,10 @@ const props = defineProps({
 
 const store = useSitesStore()
 
-// ================== ESTADOS ==================
+/* ================== CONFIG DOMINIO ================== */
+const MAIN_DOMAIN = 'salchimonster.com'
+
+/* ================== ESTADOS ================== */
 const spinnersView = ref({ ciudad: false, barrio: false })
 const cities = ref([])
 
@@ -100,7 +115,11 @@ const sitesCache = ref(null)
 
 const isReady = ref(false)
 
-// ================== COMPUTED ==================
+/* ================== REDIRECCIÓN (overlay) ================== */
+const isRedirecting = ref(false)
+const targetSiteName = ref('')
+
+/* ================== COMPUTED ================== */
 const canSave = computed(() => {
   const nb = currentNeighborhood.value
   if (!currentCity.value?.city_id) return false
@@ -108,16 +127,128 @@ const canSave = computed(() => {
   return !!(nb.neighborhood_id || nb.id) && !!nb.site_id
 })
 
-// ================== HELPERS ==================
+/* ================== HELPERS ================== */
 const handleImageError = (e) => {
   e.target.style.display = 'none'
 }
 
-// ================== CONFIRM ==================
-const confirmLocation = () => {
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+const getCurrentSubdomain = () => {
+  try {
+    const host = window.location.hostname || ''
+    // dev: newark.localhost
+    if (host.endsWith('localhost')) {
+      const parts = host.split('.')
+      return parts.length >= 2 ? parts[0] : ''
+    }
+
+    // prod: newark.salchimonster.com
+    if (host.endsWith(MAIN_DOMAIN)) {
+      const parts = host.split('.')
+      // ["newark","salchimonster","com"] => "newark"
+      return parts.length >= 3 ? parts[0] : ''
+    }
+
+    return ''
+  } catch {
+    return ''
+  }
+}
+
+const buildTargetUrl = (subdomain, hash) => {
+  const isDev =
+    window.location.hostname.includes('localhost') ||
+    window.location.hostname.includes('127.0.0.1')
+
+  // Mantener ruta actual (si quieres siempre ir a "/", cambia currentPath a "/")
+  const currentPath =
+    window.location.pathname + window.location.search + window.location.hash
+
+  if (isDev) {
+    // ejemplo: newark.localhost:3000
+    const base = `${window.location.protocol}//${subdomain}.localhost:3000`
+    const url = new URL(currentPath || '/', base)
+    url.searchParams.set('hash', hash)
+    return url.toString()
+  }
+
+  // prod
+  const base = `https://${subdomain}.${MAIN_DOMAIN}`
+  const url = new URL(currentPath || '/', base)
+  url.searchParams.set('hash', hash)
+  return url.toString()
+}
+
+const saveTransferPayload = async (hash, payload) => {
+  // mismo patrón de /data/{hash} que ya usas en checkout
+  await fetch(`${URI}/data/${hash}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+const redirectToSite = async (targetSite) => {
+  const subdomain = targetSite?.subdomain
+  if (!subdomain) return // si no hay subdominio configurado, no redirigimos
+
+  const currentSub = getCurrentSubdomain()
+  if (currentSub && currentSub.toLowerCase() === String(subdomain).toLowerCase()) {
+    // ya estás en el subdominio correcto
+    return
+  }
+
+  isRedirecting.value = true
+  targetSiteName.value = targetSite?.site_name || 'Nueva sede'
+
+  try {
+    const hash = generateUUID()
+
+    const nb = currentNeighborhood.value || {}
+    const nbName = nb.name || nb.neighborhood_name || ''
+
+    const cleanNeighborhood = {
+      ...nb,
+      name: nbName,
+      id: nb.id || nb.neighborhood_id,
+      neighborhood_id: nb.neighborhood_id || nb.id,
+      delivery_price: nb.delivery_price,
+    }
+
+    const payload = {
+      kind: 'pickup_location',
+      created_at: new Date().toISOString(),
+      from_url: window.location.href,
+      site_location: targetSite,
+      location_meta: {
+        city: currentCity.value,
+        neigborhood: cleanNeighborhood,
+      },
+    }
+
+    await saveTransferPayload(hash, payload)
+
+    const targetUrl = buildTargetUrl(subdomain, hash)
+    window.location.href = targetUrl
+  } catch (e) {
+    console.error('Redirection error:', e)
+    isRedirecting.value = false
+  }
+}
+
+/* ================== CONFIRM ================== */
+const confirmLocation = async () => {
   if (!canSave.value) return
 
-  // “recoger” -> normalmente delivery_price no aplica; lo dejo en 0 para no afectar cálculos
+  // “recoger” -> delivery_price en 0 para no afectar cálculos
   store.updateLocation(
     {
       city: currentCity.value,
@@ -127,10 +258,14 @@ const confirmLocation = () => {
     0
   )
 
+  // ✅ cerrar modal (igual vamos a redirigir si aplica)
   store.setVisible('site_recoger', false)
+
+  // ✅ redirigir al subdominio de la sede
+  await redirectToSite(currentSite.value)
 }
 
-// ================== APIs ==================
+/* ================== APIs ================== */
 const getCities = async () => {
   spinnersView.value.ciudad = true
   try {
@@ -184,10 +319,12 @@ const loadSiteByNeighborhood = async (nb) => {
 
   const allSites = await getSitesOnce()
   currentSite.value =
-    allSites.find((s) => Number(s.site_id) === Number(nb.site_id)) || { site_name: 'Sede' }
+    allSites.find((s) => Number(s.site_id) === Number(nb.site_id)) || {
+      site_name: 'Sede',
+    }
 }
 
-// ================== LIFECYCLE ==================
+/* ================== LIFECYCLE ================== */
 onMounted(async () => {
   await getCities()
   loadFixedCity()
@@ -226,7 +363,7 @@ watch(
   }
 )
 
-// ✅ Cuando cambia el barrio, trae la sede
+// ✅ Cuando cambia la sede (barrio), trae el site
 watch(currentNeighborhood, async (newVal) => {
   if (!isReady.value) return
   await loadSiteByNeighborhood(newVal)
@@ -293,22 +430,6 @@ watch(currentNeighborhood, async (newVal) => {
   border-radius: 50%;
   animation: spin 1s infinite linear;
   margin-left: 5px;
-}
-
-.fixed-city-pill {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-weight: 800;
-  color: #111827;
-}
-.fixed-city-pill.is-loading {
-  opacity: 0.8;
-  font-weight: 700;
 }
 
 .image-preview {
@@ -379,6 +500,105 @@ watch(currentNeighborhood, async (newVal) => {
   }
 }
 
+/* OVERLAY REDIRECCIÓN */
+.redirect-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.redirect-content {
+  text-align: center;
+  animation: popIn 0.5s ease-out;
+}
+.redirect-spinner {
+  position: relative;
+  display: inline-flex;
+  margin-bottom: 1.2rem;
+}
+.rocket {
+  font-size: 2.5rem;
+  z-index: 2;
+  animation: rocketFloat 1.5s ease-in-out infinite alternate;
+}
+.pulse-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  opacity: 0;
+  animation: pulse 2s infinite;
+}
+.redirect-title {
+  font-size: 0.95rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.redirect-store {
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: #0f172a;
+  margin: 0.4rem 0 0.2rem;
+  line-height: 1.1;
+  max-width: 90vw;
+}
+.redirect-subtitle {
+  font-size: 0.95rem;
+  color: #94a3b8;
+  margin-top: 0.6rem;
+}
+
+@keyframes popIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes rocketFloat {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* si NO quieres todo en mayúscula, borra esto */
 * {
   text-transform: uppercase;
 }
