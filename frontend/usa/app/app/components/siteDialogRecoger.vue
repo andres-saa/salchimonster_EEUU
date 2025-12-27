@@ -1,18 +1,13 @@
 <template>
-  <Dialog
-    style="max-width: 30rem; margin: .5rem; width: 90%;"
-    modal
-    v-model:visible="siteStore.visibles.site_recoger"
-  >
-    <!-- OVERLAY REDIRECCIÓN -->
+  <div class="summary-wrapper">
+    <!-- ================== OVERLAY REDIRECCIÓN ================== -->
     <Transition name="fade">
       <div v-if="isRedirecting" class="redirect-overlay">
         <div class="redirect-content">
           <div class="redirect-spinner">
-            <span class="rocket">🚀</span>
+            <Icon name="mdi:rocket-launch-outline" size="3em" class="rocket-icon" />
             <div class="pulse-ring"></div>
           </div>
-
           <h2 class="redirect-title">Te estamos llevando a</h2>
           <h3 class="redirect-store">{{ targetSiteName || 'Nueva sede' }}</h3>
           <p class="redirect-subtitle">Transfiriendo tu pedido...</p>
@@ -20,142 +15,254 @@
       </div>
     </Transition>
 
-    <div>
-      <div class="modal-body">
-        <!-- ================== BARRIO / SEDE ================== -->
-        <div v-if="currentCity?.city_id" class="form-group fade-in">
-          <label>Selecciona una sede</label>
+    <div class="summary-card">
+      <div class="card-header">
+        <h5 class="title">Resumen</h5>
+      </div>
 
-          <div class="custom-select">
-            <Select
-              v-model="currentNeighborhood"
-              :options="possibleNeighborhoods"
-              optionLabel="name"
-              placeholder="Selecciona tu sede"
-              filter
-              filterPlaceholder="Buscar Sede"
-              :disabled="!possibleNeighborhoods.length"
-              :loading="spinnersView.barrio"
-              class="pv-select"
-            />
+      <div class="product-list">
+        <div
+          v-for="product in store.cart"
+          :key="product.productogeneral_id || product.signature"
+          class="product-item"
+        >
+          <div class="product-main-row">
+            <div class="product-info">
+              <span class="qty-badge">( {{ product.pedido_cantidad }} )</span>
+              <span class="product-name">
+                {{ formatName(product.pedido_nombre_producto) }}
+              </span>
+            </div>
+
+            <div class="product-price">
+              <span v-if="product.modificadorseleccionList.length < 1">
+                {{ formatoPesosColombianos(product.pedido_base_price * product.pedido_cantidad) }}
+              </span>
+              <span v-else>
+                {{ formatoPesosColombianos(store.calculateSubtotalProduct(product)) }}
+              </span>
+            </div>
           </div>
 
-          <span v-if="spinnersView.barrio" class="loader-mini-external"></span>
+          <div
+            v-if="product.lista_productocombo && product.lista_productocombo.length > 0"
+            class="combo-list"
+          >
+            <div
+              v-for="comboItem in product.lista_productocombo"
+              :key="comboItem.producto_id"
+              class="combo-item"
+            >
+              <span class="combo-qty">
+                ( {{ product.pedido_cantidad }} ) <b>{{ parseInt(comboItem.pedido_cantidad) }}</b>
+              </span>
+              <span class="combo-name">{{ formatName(comboItem.pedido_nombre) }}</span>
+            </div>
+          </div>
+
+          <div
+            v-if="product.modificadorseleccionList && product.modificadorseleccionList.length > 0"
+            class="additions-list"
+          >
+            <div
+              v-for="item in product.modificadorseleccionList"
+              :key="item.modificadorseleccion_id || item.modificadorseleccion_nombre"
+              class="addition-row"
+            >
+              <div class="addition-name">
+                - ( {{ product.pedido_cantidad }} ) <b>{{ item.modificadorseleccion_cantidad }}</b>
+                {{ formatName(item.modificadorseleccion_nombre) }}
+              </div>
+              <div v-if="item.pedido_precio > 0" class="addition-price">
+                {{
+                  formatoPesosColombianos(
+                    item.pedido_precio * item.modificadorseleccion_cantidad * product.pedido_cantidad
+                  )
+                }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="summary-totals">
+        <div class="total-row">
+          <span class="label">Subtotal</span>
+          <span class="value">{{ formatoPesosColombianos(store.cartSubtotal) }}</span>
         </div>
 
-        <!-- Preview de sede -->
-        <div
-          class="image-preview fade-in"
-          v-if="currentCity?.city_id && currentNeighborhood?.site_id"
-        >
-          <div style="padding: 1rem;" class="image-overlay">
-            <p class="site-info">
-              <span class="brand">SALCHIMONSTER - </span>
-              <span class="site">{{ currentSite?.site_name || 'Cargando...' }}</span>
-            </p>
-            <p class="delivery-info">
-              Recoger en sede : {{ currentNeighborhood?.name || '' }}
-            </p>
+        <div class="total-row" v-if="store.cartTotalDiscount > 0">
+          <span class="label discount">Descuento</span>
+          <span class="value discount">- {{ formatoPesosColombianos(store.cartTotalDiscount) }}</span>
+        </div>
+
+        <div class="total-row" v-if="siteStore?.location?.site?.site_id != 33">
+          <div class="label-wrapper">
+            <span class="label" :class="{ strike: deliveryPrice === 0 && !isEditingDelivery }">
+              Domicilio
+            </span>
+
+            <button
+              v-if="isLoggedIn"
+              type="button"
+              class="edit-btn"
+              @click="toggleEditDelivery"
+              :disabled="isRedirecting"
+            >
+              {{ isEditingDelivery ? 'Guardar' : 'Cambiar' }}
+            </button>
           </div>
 
-          <img
-            :src="`${URI}/read-photo-product/${currentSite?.img_id}`"
-            class="site-img"
-            style="aspect-ratio: 5/3; object-fit: cover;"
-            @error="handleImageError"
-          />
+          <div class="value">
+            <div v-if="isEditingDelivery">
+              <input
+                type="number"
+                v-model.number="deliveryPrice"
+                class="delivery-input"
+                :disabled="isRedirecting"
+              />
+            </div>
+
+            <div v-else>
+              <template v-if="deliveryPrice === 0">
+                <span class="free-delivery">
+                  {{ route.path.includes('reservas') ? 'Ir a la sede' : 'Recoger en local' }}
+                </span>
+              </template>
+
+              <template v-else>
+                {{ formatoPesosColombianos(deliveryPrice) }}
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div class="total-row final-total">
+          <span class="label">Total</span>
+          <span class="value">
+            {{ formatoPesosColombianos(store.cartTotal + (deliveryPrice || 0)) }}
+          </span>
+        </div>
+      </div>
+
+      <div class="actions-container">
+        <div
+          v-if="siteStore.status?.status === 'closed' && route.path !== '/reservas'"
+          class="closed-alert"
+        >
+          <i class="pi pi-clock"></i> Cerrado, abre a las {{ siteStore.status.next_opening_time }}
+        </div>
+
+        <div class="buttons-stack">
+          <NuxtLink to="/" v-if="route.path.includes('cart')" class="link-wrapper">
+            <button type="button" class="btn btn-text" :disabled="isRedirecting">
+              Volver al menú
+            </button>
+          </NuxtLink>
+
+          <NuxtLink to="/cart" v-else-if="route.path !== '/reservas'" class="link-wrapper">
+            <button type="button" class="btn btn-text" :disabled="isRedirecting">
+              Volver al carrito
+            </button>
+          </NuxtLink>
+
+          <!-- ✅ Reservas: ir a pagar -->
+          <NuxtLink
+            to="/pay"
+            v-if="route.path === '/reservas' && siteStore.status?.status !== 'closed'"
+            class="link-wrapper"
+          >
+            <button type="button" class="btn btn-primary" :disabled="isRedirecting">
+              Pedir
+            </button>
+          </NuxtLink>
+
+          <!-- ✅ Carrito: ir a pagar -->
+          <NuxtLink
+            to="/pay"
+            v-else-if="route.path === '/cart' && siteStore.status?.status !== 'closed'"
+            class="link-wrapper"
+          >
+            <button type="button" class="btn btn-primary" :disabled="isRedirecting">
+              Finalizar pedido
+            </button>
+          </NuxtLink>
+
+          <!-- ✅ Pay: generar pedido -->
+          <button
+            v-else-if="
+              route.path === '/pay' &&
+              !reportes.loading.visible &&
+              siteStore.status?.status !== 'closed' &&
+              (isLoggedIn || user.user.payment_method_option?.id != 9)
+            "
+            type="button"
+            class="btn btn-primary"
+            :disabled="reportes.loading.visible || isRedirecting"
+            @click="orderService.sendOrder()"
+          >
+            <span v-if="reportes.loading.visible">Procesando...</span>
+            <span v-else>{{ isLoggedIn ? 'Generar Pedido / Link' : 'Finalizar pedido' }}</span>
+          </button>
+
+          <!-- ✅ Pay: tarjeta -->
+          <button
+            v-else-if="
+              route.path === '/pay' &&
+              !reportes.loading.visible &&
+              siteStore.status?.status !== 'closed' &&
+              !isLoggedIn &&
+              user.user.payment_method_option?.id == 9
+            "
+            type="button"
+            class="btn btn-primary"
+            :disabled="reportes.loading.visible || isRedirecting"
+            @click="pay"
+          >
+            <span v-if="reportes.loading.visible">Procesando...</span>
+            <span v-else>Pagar con tarjeta</span>
+          </button>
         </div>
       </div>
     </div>
-
-    <template #footer>
-      <button
-        @click="confirmLocation"
-        :disabled="!canSave || isRedirecting"
-        class="native-btn"
-        :class="{ 'btn-disabled': !canSave || isRedirecting }"
-      >
-        Confirmar Ubicación
-      </button>
-    </template>
-  </Dialog>
+  </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import Dialog from 'primevue/dialog'
-import Select from 'primevue/select'
-import { useSitesStore } from '@/stores/site'
-import { URI } from '@/service/conection'
+import { onMounted, ref, watch, computed } from 'vue'
+import { useRoute, useHead } from '#imports'
+import { formatoPesosColombianos } from '~/service/utils/formatoPesos'
+import { usecartStore, useSitesStore, useUserStore, useReportesStore } from '#imports'
+import { orderService } from '@/service/order/orderService.ts'
+import { orderServiceEpayco } from '@/service/order/orderServiceEpayco'
+import { URI, SELF_URI } from '@/service/conection'
 
-/**
- * ✅ IMPORTANTE:
- * <SiteDialogRecoger :city_id="15" />
- */
-const props = defineProps({
-  city_id: { type: [Number, String], required: true },
+/* --- Script ePayco (solo si pagan tarjeta) --- */
+useHead({
+  script: [{ src: 'https://checkout.epayco.co/checkout.js', async: true, defer: true }]
 })
 
-/* ================== STORES ================== */
+/* ================= STORES / ROUTE ================= */
+const reportes = useReportesStore()
+const route = useRoute()
+const store = usecartStore()
 const siteStore = useSitesStore()
+const user = useUserStore()
 
-// Intentar traer stores de checkout (sin romper si este dialog se usa fuera)
-const cartStore = ref(null)
-const userStore = ref(null)
-
-const loadOptionalStores = async () => {
-  // 1) Nuxt (#imports)
-  try {
-    const mod = await import('#imports')
-    if (mod?.usecartStore) cartStore.value = mod.usecartStore()
-    if (mod?.useUserStore) userStore.value = mod.useUserStore()
-    return
-  } catch (_) {}
-
-  // 2) Vue clásico (si existen rutas locales)
-  try {
-    const modCart = await import('@/stores/cart')
-    if (modCart?.usecartStore) cartStore.value = modCart.usecartStore()
-  } catch (_) {}
-
-  try {
-    const modUser = await import('@/stores/user')
-    if (modUser?.useUserStore) userStore.value = modUser.useUserStore()
-  } catch (_) {}
-}
-
-/* ================== CONFIG DOMINIO ================== */
-const MAIN_DOMAIN = 'usa.salchimonster.com'
-
-/* ================== ESTADOS ================== */
-const spinnersView = ref({ ciudad: false, barrio: false })
-const cities = ref([])
-
-const currentCity = ref(null)
-const currentNeighborhood = ref(null)
-const possibleNeighborhoods = ref([])
-const currentSite = ref({})
-
-// cache para no pedir /sites en cada cambio
-const sitesCache = ref(null)
-
-const isReady = ref(false)
-
-/* ================== REDIRECCIÓN (overlay) ================== */
-const isRedirecting = ref(false)
-const targetSiteName = ref('')
-
-/* ================== COMPUTED ================== */
-const canSave = computed(() => {
-  const nb = currentNeighborhood.value
-  if (!currentCity.value?.city_id) return false
-  if (!nb) return false
-  return !!(nb.neighborhood_id || nb.id) && !!nb.site_id
-})
-
-/* ================== HELPERS ================== */
-const handleImageError = (e) => {
-  e.target.style.display = 'none'
+/* ================= Helpers ================= */
+const ensureNeighborhood = () => {
+  if (!siteStore.location) siteStore.location = {}
+  if (!siteStore.location.neigborhood) {
+    siteStore.location.neigborhood = {
+      name: '',
+      delivery_price: 0,
+      neighborhood_id: null,
+      id: null,
+      site_id: null
+    }
+  }
 }
 
 const generateUUID = () => {
@@ -167,413 +274,290 @@ const generateUUID = () => {
   })
 }
 
-const getCurrentSubdomain = () => {
-  try {
-    const host = window.location.hostname || ''
-    // dev: newark.localhost
-    if (host.endsWith('localhost')) {
-      const parts = host.split('.')
-      return parts.length >= 2 ? parts[0] : ''
+const isPickupOrder = computed(() => [2, 6].includes(Number(user.user?.order_type?.id)))
+const isReserva = computed(() => route.path.includes('reservas'))
+
+/**
+ * ✅ deliveryPrice “verdadero” (evita valor viejo):
+ * Prioridad:
+ *  1) Si es pickup o reservas => 0
+ *  2) neigborhood.delivery_price (si ya está seteado)
+ *  3) address_details.delivery_cost_cop (google coverage)
+ *  4) user.user.site.delivery_cost_cop (dispatcher/google)
+ *  5) siteStore.current_delivery (fallback)
+ */
+const deliveryPrice = computed({
+  get: () => {
+    if (isReserva.value || isPickupOrder.value) return 0
+
+    const nb = siteStore.location?.neigborhood
+    if (nb && nb.delivery_price != null) {
+      const v = Number(nb.delivery_price) || 0
+      if (v > 0) return v
     }
 
-    // prod: newark.usa.salchimonster.com
-    if (host.endsWith(MAIN_DOMAIN)) {
-      const parts = host.split('.')
-      return parts.length >= 3 ? parts[0] : ''
-    }
+    const ad = store.address_details || siteStore.location?.address_details
+    if (ad && ad.delivery_cost_cop != null) return Number(ad.delivery_cost_cop) || 0
 
-    return ''
-  } catch {
-    return ''
+    const uSite = user.user?.site
+    if (uSite && uSite.delivery_cost_cop != null) return Number(uSite.delivery_cost_cop) || 0
+
+    if (siteStore.current_delivery != null) return Number(siteStore.current_delivery) || 0
+
+    return 0
+  },
+  set: (v) => {
+    ensureNeighborhood()
+    const val = Math.max(0, Number(v) || 0)
+    siteStore.location.neigborhood.delivery_price = val
+    siteStore.current_delivery = val
+
+    // opcional: si existe address_details, mantenlo consistente para el payload
+    if (store.address_details) store.address_details.delivery_cost_cop = val
+    if (siteStore.location?.address_details) siteStore.location.address_details.delivery_cost_cop = val
   }
+})
+
+/* ================= Login / edición domicilio ================= */
+const isEditingDelivery = ref(false)
+const order_id = ref('')
+const epaycoPublicKey = 'ad3bfbac4531d3b82ece35e36bdf320a'
+const isLoggedIn = computed(() => !!user.user?.token && !!user.user?.inserted_by)
+
+const toggleEditDelivery = () => {
+  if (isRedirecting.value) return
+
+  // Si estaba editando y va a guardar:
+  if (isEditingDelivery.value) {
+    const v = deliveryPrice.value
+    ensureNeighborhood()
+    siteStore.location.neigborhood.delivery_price = v
+    siteStore.current_delivery = v
+  }
+  isEditingDelivery.value = !isEditingDelivery.value
+}
+
+/* ================= Nombre producto ================= */
+const formatName = (str) => {
+  if (!str) return ''
+  const lower = str.toLowerCase()
+  return lower.charAt(0).toUpperCase() + lower.slice(1)
+}
+
+/**
+ * ✅ Sincroniza store con dispatcher/google apenas cambien.
+ * (Y NO pisa cuando estás editando manualmente)
+ */
+watch(
+  () => [
+    user.user?.order_type?.id,
+    store.address_details?.delivery_cost_cop,
+    siteStore.location?.address_details?.delivery_cost_cop,
+    user.user?.site?.delivery_cost_cop,
+    siteStore.current_delivery,
+    route.path
+  ],
+  () => {
+    if (isEditingDelivery.value) return
+    ensureNeighborhood()
+    const v = deliveryPrice.value
+    siteStore.location.neigborhood.delivery_price = v
+    siteStore.current_delivery = v
+  },
+  { immediate: true }
+)
+
+/* ================= REDIRECT (igual que checkout) ================= */
+const isRedirecting = ref(false)
+const targetSiteName = ref('')
+
+const safeClone = (obj) => {
+  try {
+    return JSON.parse(JSON.stringify(obj ?? null))
+  } catch {
+    return obj ?? null
+  }
+}
+
+const resolveCoverageData = computed(() => {
+  // prioridad: address_details (google coverage) -> user.user.site (si es payload tipo coverage)
+  return store.address_details || user.user?.site || null
+})
+
+const resolveNearestSite = (data) => {
+  if (!data) return null
+  return data?.nearest?.site || data?.site_location || data?.site || (data?.site_id ? data : null)
+}
+
+const getBaseDomain = () => {
+  const host = window.location.hostname
+  if (host.includes('localhost')) return null
+  const parts = host.split('.')
+  if (parts.length <= 2) return host
+  // quita el subdominio actual y deja el dominio base (incluye "usa." si aplica en tu infra)
+  return parts.slice(1).join('.')
 }
 
 const buildTargetUrl = (subdomain, hash) => {
-  const isDev =
-    window.location.hostname.includes('localhost') ||
-    window.location.hostname.includes('127.0.0.1')
-
-  // ✅ igual que checkout: /pay?hash=...
-  const path = '/pay'
-  const query = `hash=${encodeURIComponent(hash)}`
   const protocol = window.location.protocol
+  const isDev = window.location.hostname.includes('localhost')
 
-  if (isDev) {
-    const base = `${protocol}//${subdomain}.localhost:3000${path}?${query}`
-    return base
-  }
+  // Mantén el paso donde está el usuario
+  const path = route.path === '/pay' ? '/pay' : route.path === '/cart' ? '/cart' : route.path
 
-  return `https://${subdomain}.${MAIN_DOMAIN}${path}?${query}`
+  if (isDev) return `${protocol}//${subdomain}.localhost:3000${path}?hash=${hash}`
+
+  const base = getBaseDomain()
+  if (!base) return null
+  return `${protocol}//${subdomain}.${base}${path}?hash=${hash}`
 }
 
-const saveTransferPayload = async (hash, payload) => {
-  // mismo patrón de /data/{hash} que ya usas en checkout
-  await fetch(`${URI}/data/${hash}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-}
+const shouldRedirectBySiteMismatch = computed(() => {
+  if (typeof window === 'undefined') return false
+  if (isRedirecting.value) return false
+  if (isPickupOrder.value || isReserva.value) return false
 
-const buildFullPayload = (targetSite) => {
-  const nb = currentNeighborhood.value || {}
-  const nbName = nb.name || nb.neighborhood_name || ''
+  const data = resolveCoverageData.value
+  const nearest = resolveNearestSite(data)
+  const current = siteStore.location?.site
 
-  const cleanNeighborhood = {
-    ...nb,
-    name: nbName,
-    id: nb.id || nb.neighborhood_id,
-    neighborhood_id: nb.neighborhood_id || nb.id,
-    delivery_price: nb.delivery_price ?? 0,
-    site_id: nb.site_id ?? null,
-  }
+  if (!nearest?.site_id || !current?.site_id) return false
+  return String(nearest.site_id) !== String(current.site_id)
+})
 
-  const u = userStore.value?.user ? userStore.value.user : (userStore.value?.user?.user || null)
-  const userObj = userStore.value?.user?.user || userStore.value?.user || null
-
-  // cart store: en tu checkout es store.cart / store.applied_coupon / store.coupon_ui / store.order_notes
-  const cartArr = cartStore.value?.cart || null
-  const discount = cartStore.value?.applied_coupon || null
-  const couponUi = cartStore.value?.coupon_ui || null
-  const couponCode =
-    cartStore.value?.applied_coupon?.code ||
-    cartStore.value?.coupon_ui?.draft_code ||
-    null
-
-  const orderNotes = cartStore.value?.order_notes || cartStore.value?.order_notes_text || null
-
-  // ✅ user completo (incluye order_type, payment_method_option, etc.)
-  const finalUser =
-    userObj
-      ? {
-          ...userObj,
-          // Para pickup, reflejamos sede seleccionada como "site"
-          site: targetSite || userObj.site || null,
-          address:
-            targetSite?.site_address ||
-            targetSite?.site_name ||
-            userObj.address ||
-            null,
-          lat: null,
-          lng: null,
-          place_id: null,
-        }
-      : null
-
-  return {
-    kind: 'pickup_location',
-    created_at: new Date().toISOString(),
-    from_url: window.location.href,
-
-    // ✅ lo más importante (igual a checkout)
-    user: finalUser,
-    cart: cartArr,
-    site_location: targetSite,
-
-    discount,
-    coupon_ui: couponUi,
-    coupon_code: couponCode,
-    order_notes: orderNotes,
-
-    // meta extra (útil para debug / restore)
-    location_meta: {
-      city: currentCity.value,
-      neigborhood: cleanNeighborhood, // mantengo tu key "neigborhood"
-    },
-  }
-}
-
-const redirectToSite = async (targetSite) => {
-  const subdomain = targetSite?.subdomain
-  if (!subdomain) return // si no hay subdominio configurado, no redirigimos
-
-  const currentSub = getCurrentSubdomain()
-  if (currentSub && currentSub.toLowerCase() === String(subdomain).toLowerCase()) {
-    // ya estás en el subdominio correcto
-    return
-  }
+const handleSiteChange = async (data) => {
+  const nearestSite = resolveNearestSite(data)
+  if (!nearestSite?.subdomain) return
 
   isRedirecting.value = true
-  targetSiteName.value = targetSite?.site_name || 'Nueva sede'
+  targetSiteName.value = nearestSite.site_name || 'Nueva sede'
 
   try {
     const hash = generateUUID()
 
-    // ✅ payload completo como checkout
-    const payload = buildFullPayload(targetSite)
+    const payload = {
+      user: {
+        ...safeClone(user.user),
+        // ✅ importante: manda lo que esté seleccionado (tipo orden, método, placa, etc)
+        order_type: safeClone(user.user?.order_type),
+        payment_method_option: safeClone(user.user?.payment_method_option),
+        // ✅ manda la data de cobertura si existe
+        site: safeClone(data),
+        address: data?.formatted_address || safeClone(user.user?.address) || null,
+        lat: data?.lat ?? safeClone(user.user?.lat) ?? null,
+        lng: data?.lng ?? safeClone(user.user?.lng) ?? null,
+        place_id: data?.place_id ?? safeClone(user.user?.place_id) ?? null
+      },
+      cart: safeClone(store.cart),
+      site_location: safeClone(nearestSite),
+      discount: safeClone(store.applied_coupon || null),
+      coupon_ui: safeClone(store.coupon_ui || null),
+      coupon_code: store.applied_coupon?.code || store.coupon_ui?.draft_code || null,
+      order_notes: safeClone(store.order_notes || null),
+      address_details: safeClone(store.address_details || null),
+      current_delivery: Number(siteStore.current_delivery) || 0
+    }
 
-    await saveTransferPayload(hash, payload)
+    await fetch(`${URI}/data/${hash}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
 
-    const targetUrl = buildTargetUrl(subdomain, hash)
-    window.location.href = targetUrl
+    const url = buildTargetUrl(nearestSite.subdomain, hash)
+    if (!url) {
+      alert('Lo sentimos, no pudimos construir la URL de esta sede.')
+      isRedirecting.value = false
+      return
+    }
+
+    window.location.href = url
   } catch (e) {
-    console.error('Redirection error:', e)
+    console.error('Error switching site:', e)
+    alert('Ocurrió un error al cambiar de sede. Intenta nuevamente.')
     isRedirecting.value = false
   }
 }
 
-/* ================== CONFIRM ================== */
-const confirmLocation = async () => {
-  if (!canSave.value) return
-
-  // “recoger” -> delivery_price en 0 para no afectar cálculos
-  siteStore.updateLocation(
-    {
-      city: currentCity.value,
-      neigborhood: currentNeighborhood.value, // (mantengo tu key como está en tu store)
-      site: currentSite.value,
-    },
-    0
-  )
-
-  // ✅ cerrar modal (igual vamos a redirigir si aplica)
-  siteStore.setVisible('site_recoger', false)
-
-  // ✅ redirigir al subdominio de la sede con payload completo
-  await redirectToSite(currentSite.value)
-}
-
-/* ================== APIs ================== */
-const getCities = async () => {
-  spinnersView.value.ciudad = true
-  try {
-    const res = await fetch(`${URI}/cities`)
-    cities.value = await res.json()
-  } catch {
-    cities.value = []
-  } finally {
-    spinnersView.value.ciudad = false
-  }
-}
-
-const loadFixedCity = () => {
-  const id = Number(props.city_id)
-  currentCity.value = cities.value.find((c) => Number(c.city_id) === id) || null
-}
-
-const loadNeighborhoods = async () => {
-  if (!currentCity.value?.city_id) {
-    possibleNeighborhoods.value = []
-    return
-  }
-
-  spinnersView.value.barrio = true
-  try {
-    const res = await fetch(`${URI}/neighborhoods/by-city/${currentCity.value.city_id}`)
-    possibleNeighborhoods.value = await res.json()
-  } catch {
-    possibleNeighborhoods.value = []
-  } finally {
-    spinnersView.value.barrio = false
-  }
-}
-
-const getSitesOnce = async () => {
-  if (sitesCache.value) return sitesCache.value
-  try {
-    const res = await fetch(`${URI}/sites`)
-    sitesCache.value = await res.json()
-  } catch {
-    sitesCache.value = []
-  }
-  return sitesCache.value
-}
-
-const loadSiteByNeighborhood = async (nb) => {
-  if (!nb?.site_id) {
-    currentSite.value = {}
-    return
-  }
-
-  const allSites = await getSitesOnce()
-  currentSite.value =
-    allSites.find((s) => Number(s.site_id) === Number(nb.site_id)) || {
-      site_name: 'Sede',
-    }
-}
-
-/* ================== LIFECYCLE ================== */
-onMounted(async () => {
-  await loadOptionalStores()
-
-  await getCities()
-  loadFixedCity()
-  await loadNeighborhoods()
-
-  // Restore si ya existe algo guardado
-  if (siteStore.location?.city && Number(siteStore.location.city.city_id) === Number(props.city_id)) {
-    const wantedId =
-      siteStore.location.neigborhood?.neighborhood_id || siteStore.location.neigborhood?.id
-
-    if (wantedId) {
-      const match = possibleNeighborhoods.value.find(
-        (n) => (n.neighborhood_id || n.id) === wantedId
-      )
-      if (match) currentNeighborhood.value = match
-    }
-  } else {
-    currentNeighborhood.value = null
-  }
-
-  isReady.value = true
-})
-
-// ✅ Si cambia el city_id (prop), recarga todo y fija la ciudad
+// ✅ si llega coverage/dispatcher apuntando a otra sede, redirecciona con overlay + payload
 watch(
-  () => props.city_id,
+  () => [
+    shouldRedirectBySiteMismatch.value,
+    store.address_details?.nearest?.site?.site_id,
+    user.user?.site?.nearest?.site?.site_id,
+    siteStore.location?.site?.site_id
+  ],
   async () => {
-    if (!cities.value.length) await getCities()
-
-    currentNeighborhood.value = null
-    currentSite.value = {}
-    possibleNeighborhoods.value = []
-
-    loadFixedCity()
-    await loadNeighborhoods()
-  }
+    if (!shouldRedirectBySiteMismatch.value) return
+    const data = resolveCoverageData.value
+    if (!data) return
+    await handleSiteChange(data)
+  },
+  { immediate: true }
 )
 
-// ✅ Cuando cambia la sede (barrio), trae el site
-watch(currentNeighborhood, async (newVal) => {
-  if (!isReady.value) return
-  await loadSiteByNeighborhood(newVal)
+/* ================= ePayco ================= */
+const pay = async () => {
+  if (typeof window !== 'undefined' && !window.ePayco) {
+    console.warn('El SDK de ePayco aun no ha cargado.')
+    alert('Cargando pasarela de pagos, intenta de nuevo en un momento...')
+    return
+  }
+
+  order_id.value = await orderServiceEpayco.sendOrder()
+  if (!order_id.value) return
+  payWithEpayco(order_id.value)
+}
+
+const payWithEpayco = (id) => {
+  if (typeof window === 'undefined' || !window.ePayco) {
+    console.error('ePayco SDK no cargado')
+    return
+  }
+
+  const handler = window.ePayco.checkout.configure({
+    key: epaycoPublicKey,
+    test: false,
+    response_type: 'redirect',
+    onClosed: () => console.log('Modal cerrado')
+  })
+
+  const totalAPagar = store.cartTotal + (deliveryPrice.value || 0)
+
+  handler.open({
+    name: id,
+    description: `Pedido ${id}`,
+    amount: totalAPagar,
+    currency: siteStore?.location?.site?.time_zone === 'America/New_York' ? 'usd' : 'cop',
+    invoice: id,
+    country: 'co',
+    lang: 'es',
+    external: 'false',
+    confirmation: `${URI}/confirmacion-epayco`,
+    response: `${SELF_URI}/gracias-epayco`,
+    name_billing: user.user.name || '',
+    address_billing: user.user.address || '',
+    type_doc_billing: 'cc',
+    mobilephone_billing: user.user.phone_number || '',
+    email_billing: user.user.email || '',
+    methodsDisable: ['SP', 'CASH']
+  })
+}
+
+/* ================= Mount ================= */
+onMounted(() => {
+  ensureNeighborhood()
 })
 </script>
 
 <style scoped>
-.custom-select {
-  position: relative;
-  width: 100%;
-  font-family: inherit;
-  user-select: none;
-}
-
-.custom-select :deep(.p-select) {
-  width: 100%;
-}
-
-.custom-select :deep(.p-select:hover) {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-}
-
-.custom-select :deep(.p-select[aria-expanded="true"]) {
-  border-color: #000;
-  background: #fff;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.custom-select :deep(.p-select-overlay) {
-  border: 1px solid #000;
-  border-top: none;
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.modal-body {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
-  overflow-y: visible;
-}
-
-.form-group label {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: #374151;
-  margin-bottom: 0.5rem;
-  display: block;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.loader-mini-external {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid #ccc;
-  border-top-color: #000;
-  border-radius: 50%;
-  animation: spin 1s infinite linear;
-  margin-left: 5px;
-}
-
-.image-preview {
-  position: relative;
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #eee;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-.image-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.site-info {
-  font-weight: 800;
-  font-size: 1rem;
-  margin: 0;
-  text-transform: uppercase;
-}
-.delivery-info {
-  font-size: 0.85rem;
-  margin: 0;
-  opacity: 0.9;
-  margin-top: 2px;
-}
-
-.native-btn {
-  background: #000;
-  color: #fff;
-  width: 100%;
-  padding: 1rem;
-  border: none;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 0.5rem;
-  font-size: 1rem;
-  transition: transform 0.1s;
-}
-.native-btn:active {
-  transform: scale(0.98);
-}
-.native-btn.btn-disabled {
-  background: #e5e7eb;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.fade-in {
-  animation: fadeIn 0.3s ease;
-}
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* OVERLAY REDIRECCIÓN */
+/* =========================================
+   OVERLAY REDIRECCIÓN (igual que checkout)
+   ========================================= */
 .redirect-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100dvh;
   background: rgba(255, 255, 255, 0.85);
@@ -590,12 +574,13 @@ watch(currentNeighborhood, async (newVal) => {
 .redirect-spinner {
   position: relative;
   display: inline-flex;
-  margin-bottom: 1.2rem;
+  margin-bottom: 2rem;
+  color: #ff6600;
 }
-.rocket {
-  font-size: 2.5rem;
+.rocket-icon {
   z-index: 2;
   animation: rocketFloat 1.5s ease-in-out infinite alternate;
+  color: #ff6600;
 }
 .pulse-ring {
   position: absolute;
@@ -605,30 +590,30 @@ watch(currentNeighborhood, async (newVal) => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  border: 2px solid #000;
+  border: 2px solid #ff6600;
   opacity: 0;
   animation: pulse 2s infinite;
 }
 .redirect-title {
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   color: #64748b;
   margin: 0;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 .redirect-store {
-  font-size: 1.7rem;
+  font-size: 2rem;
   font-weight: 900;
   color: #0f172a;
-  margin: 0.4rem 0 0.2rem;
+  margin: 0.5rem 0;
   line-height: 1.1;
   max-width: 90vw;
 }
 .redirect-subtitle {
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: #94a3b8;
-  margin-top: 0.6rem;
+  margin-top: 1rem;
 }
 
 @keyframes popIn {
@@ -668,8 +653,299 @@ watch(currentNeighborhood, async (newVal) => {
   opacity: 0;
 }
 
-/* si NO quieres todo en mayúscula, borra esto */
-* {
-  text-transform: uppercase;
+/* --- Card --- */
+.summary-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  position: sticky;
+  top: 6rem;
+  transition: all 0.3s ease;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 1rem;
+}
+
+/* --- Lista de Productos --- */
+.product-list {
+  display: flex;
+  flex-direction: column;
+  padding-right: 0.5rem;
+}
+
+.product-list::-webkit-scrollbar {
+  width: 4px;
+}
+.product-list::-webkit-scrollbar-thumb {
+  background-color: #e5e7eb;
+  border-radius: 4px;
+}
+
+.product-item {
+  border-bottom: 3px dashed var(--border-color);
+  padding: 0.5rem 0;
+}
+.product-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.product-main-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  margin-bottom: 0.25rem;
+}
+
+.product-info {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.qty-badge {
+  font-weight: 600;
+  min-width: 24px;
+  color: var(--primary);
+  min-width: max-content;
+}
+
+.product-name {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.product-price {
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+}
+
+/* --- Combos y Adiciones --- */
+.combo-list,
+.additions-list {
+  margin-left: 1.8rem;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.combo-item,
+.addition-row {
+  display: flex;
+  justify-content: start;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.combo-qty {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+.addition-price {
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+}
+
+/* --- Totales --- */
+.divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 1.5rem 0;
+}
+
+.summary-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.label {
+  color: var(--text-secondary);
+}
+.value {
+  font-weight: 600;
+}
+
+.discount {
+  color: var(--success-text);
+}
+.strike {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.free-delivery {
+  color: var(--success-text);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.final-total {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 2px solid var(--border-color);
+  font-size: 1.25rem;
+}
+.final-total .label {
+  color: var(--text-main);
+  font-weight: 700;
+}
+.final-total .value {
+  font-weight: 800;
+}
+
+/* --- ESTILOS EDICIÓN DOMICILIO --- */
+.label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-btn {
+  background: none;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover {
+  background-color: var(--primary);
+  color: white;
+}
+
+.delivery-input {
+  width: 100px;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  text-align: right;
+  font-weight: 600;
+  outline: none;
+}
+
+.delivery-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1);
+}
+
+.delivery-input::-webkit-outer-spin-button,
+.delivery-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.delivery-input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* --- Botones --- */
+.actions-container {
+  margin-top: 2rem;
+}
+
+.closed-alert {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 1rem;
+  border: 1px solid #fecaca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.buttons-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.75rem;
+}
+
+.btn {
+  width: 100%;
+  padding: 0.875rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+.btn-text:hover {
+  color: var(--text-main);
+  text-decoration: underline;
+  background-color: #f9fafb;
+}
+
+.link-wrapper {
+  text-decoration: none;
+  display: block;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .summary-card {
+    position: relative;
+    top: 0;
+    border: none;
+    box-shadow: var(--shadow);
+    padding: 1rem;
+  }
+  .summary-wrapper {
+    padding: 0;
+    margin-top: 2rem;
+  }
+  .final-total {
+    font-size: 1.1rem;
+  }
 }
 </style>
