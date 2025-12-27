@@ -2,7 +2,7 @@
   <Dialog
     style="max-width: 30rem; margin: .5rem; width: 90%;"
     modal
-    v-model:visible="store.visibles.site_recoger"
+    v-model:visible="siteStore.visibles.site_recoger"
   >
     <!-- OVERLAY REDIRECCIÓN -->
     <Transition name="fade">
@@ -15,7 +15,7 @@
 
           <h2 class="redirect-title">Te estamos llevando a</h2>
           <h3 class="redirect-store">{{ targetSiteName || 'Nueva sede' }}</h3>
-          <p class="redirect-subtitle">Transfiriendo tu ubicación...</p>
+          <p class="redirect-subtitle">Transfiriendo tu pedido...</p>
         </div>
       </div>
     </Transition>
@@ -96,7 +96,33 @@ const props = defineProps({
   city_id: { type: [Number, String], required: true },
 })
 
-const store = useSitesStore()
+/* ================== STORES ================== */
+const siteStore = useSitesStore()
+
+// Intentar traer stores de checkout (sin romper si este dialog se usa fuera)
+const cartStore = ref(null)
+const userStore = ref(null)
+
+const loadOptionalStores = async () => {
+  // 1) Nuxt (#imports)
+  try {
+    const mod = await import('#imports')
+    if (mod?.usecartStore) cartStore.value = mod.usecartStore()
+    if (mod?.useUserStore) userStore.value = mod.useUserStore()
+    return
+  } catch (_) {}
+
+  // 2) Vue clásico (si existen rutas locales)
+  try {
+    const modCart = await import('@/stores/cart')
+    if (modCart?.usecartStore) cartStore.value = modCart.usecartStore()
+  } catch (_) {}
+
+  try {
+    const modUser = await import('@/stores/user')
+    if (modUser?.useUserStore) userStore.value = modUser.useUserStore()
+  } catch (_) {}
+}
 
 /* ================== CONFIG DOMINIO ================== */
 const MAIN_DOMAIN = 'usa.salchimonster.com'
@@ -150,10 +176,9 @@ const getCurrentSubdomain = () => {
       return parts.length >= 2 ? parts[0] : ''
     }
 
-    // prod: newark.salchimonster.com
+    // prod: newark.usa.salchimonster.com
     if (host.endsWith(MAIN_DOMAIN)) {
       const parts = host.split('.')
-      // ["newark","salchimonster","com"] => "newark"
       return parts.length >= 3 ? parts[0] : ''
     }
 
@@ -168,23 +193,17 @@ const buildTargetUrl = (subdomain, hash) => {
     window.location.hostname.includes('localhost') ||
     window.location.hostname.includes('127.0.0.1')
 
-  // Mantener ruta actual (si quieres siempre ir a "/", cambia currentPath a "/")
-  const currentPath =
-    window.location.pathname + window.location.search + window.location.hash
+  // ✅ igual que checkout: /pay?hash=...
+  const path = '/pay'
+  const query = `hash=${encodeURIComponent(hash)}`
+  const protocol = window.location.protocol
 
   if (isDev) {
-    // ejemplo: newark.localhost:3000
-    const base = `${window.location.protocol}//${subdomain}.localhost:3000`
-    const url = new URL(currentPath || '/', base)
-    url.searchParams.set('hash', hash)
-    return url.toString()
+    const base = `${protocol}//${subdomain}.localhost:3000${path}?${query}`
+    return base
   }
 
-  // prod
-  const base = `https://${subdomain}.${MAIN_DOMAIN}`
-  const url = new URL(currentPath || '/', base)
-  url.searchParams.set('hash', hash)
-  return url.toString()
+  return `https://${subdomain}.${MAIN_DOMAIN}${path}?${query}`
 }
 
 const saveTransferPayload = async (hash, payload) => {
@@ -194,6 +213,74 @@ const saveTransferPayload = async (hash, payload) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+const buildFullPayload = (targetSite) => {
+  const nb = currentNeighborhood.value || {}
+  const nbName = nb.name || nb.neighborhood_name || ''
+
+  const cleanNeighborhood = {
+    ...nb,
+    name: nbName,
+    id: nb.id || nb.neighborhood_id,
+    neighborhood_id: nb.neighborhood_id || nb.id,
+    delivery_price: nb.delivery_price ?? 0,
+    site_id: nb.site_id ?? null,
+  }
+
+  const u = userStore.value?.user ? userStore.value.user : (userStore.value?.user?.user || null)
+  const userObj = userStore.value?.user?.user || userStore.value?.user || null
+
+  // cart store: en tu checkout es store.cart / store.applied_coupon / store.coupon_ui / store.order_notes
+  const cartArr = cartStore.value?.cart || null
+  const discount = cartStore.value?.applied_coupon || null
+  const couponUi = cartStore.value?.coupon_ui || null
+  const couponCode =
+    cartStore.value?.applied_coupon?.code ||
+    cartStore.value?.coupon_ui?.draft_code ||
+    null
+
+  const orderNotes = cartStore.value?.order_notes || cartStore.value?.order_notes_text || null
+
+  // ✅ user completo (incluye order_type, payment_method_option, etc.)
+  const finalUser =
+    userObj
+      ? {
+          ...userObj,
+          // Para pickup, reflejamos sede seleccionada como "site"
+          site: targetSite || userObj.site || null,
+          address:
+            targetSite?.site_address ||
+            targetSite?.site_name ||
+            userObj.address ||
+            null,
+          lat: null,
+          lng: null,
+          place_id: null,
+        }
+      : null
+
+  return {
+    kind: 'pickup_location',
+    created_at: new Date().toISOString(),
+    from_url: window.location.href,
+
+    // ✅ lo más importante (igual a checkout)
+    user: finalUser,
+    cart: cartArr,
+    site_location: targetSite,
+
+    discount,
+    coupon_ui: couponUi,
+    coupon_code: couponCode,
+    order_notes: orderNotes,
+
+    // meta extra (útil para debug / restore)
+    location_meta: {
+      city: currentCity.value,
+      neigborhood: cleanNeighborhood, // mantengo tu key "neigborhood"
+    },
+  }
 }
 
 const redirectToSite = async (targetSite) => {
@@ -212,27 +299,8 @@ const redirectToSite = async (targetSite) => {
   try {
     const hash = generateUUID()
 
-    const nb = currentNeighborhood.value || {}
-    const nbName = nb.name || nb.neighborhood_name || ''
-
-    const cleanNeighborhood = {
-      ...nb,
-      name: nbName,
-      id: nb.id || nb.neighborhood_id,
-      neighborhood_id: nb.neighborhood_id || nb.id,
-      delivery_price: nb.delivery_price,
-    }
-
-    const payload = {
-      kind: 'pickup_location',
-      created_at: new Date().toISOString(),
-      from_url: window.location.href,
-      site_location: targetSite,
-      location_meta: {
-        city: currentCity.value,
-        neigborhood: cleanNeighborhood,
-      },
-    }
+    // ✅ payload completo como checkout
+    const payload = buildFullPayload(targetSite)
 
     await saveTransferPayload(hash, payload)
 
@@ -249,7 +317,7 @@ const confirmLocation = async () => {
   if (!canSave.value) return
 
   // “recoger” -> delivery_price en 0 para no afectar cálculos
-  store.updateLocation(
+  siteStore.updateLocation(
     {
       city: currentCity.value,
       neigborhood: currentNeighborhood.value, // (mantengo tu key como está en tu store)
@@ -259,9 +327,9 @@ const confirmLocation = async () => {
   )
 
   // ✅ cerrar modal (igual vamos a redirigir si aplica)
-  store.setVisible('site_recoger', false)
+  siteStore.setVisible('site_recoger', false)
 
-  // ✅ redirigir al subdominio de la sede
+  // ✅ redirigir al subdominio de la sede con payload completo
   await redirectToSite(currentSite.value)
 }
 
@@ -326,14 +394,16 @@ const loadSiteByNeighborhood = async (nb) => {
 
 /* ================== LIFECYCLE ================== */
 onMounted(async () => {
+  await loadOptionalStores()
+
   await getCities()
   loadFixedCity()
   await loadNeighborhoods()
 
   // Restore si ya existe algo guardado
-  if (store.location?.city && Number(store.location.city.city_id) === Number(props.city_id)) {
+  if (siteStore.location?.city && Number(siteStore.location.city.city_id) === Number(props.city_id)) {
     const wantedId =
-      store.location.neigborhood?.neighborhood_id || store.location.neigborhood?.id
+      siteStore.location.neigborhood?.neighborhood_id || siteStore.location.neigborhood?.id
 
     if (wantedId) {
       const match = possibleNeighborhoods.value.find(
