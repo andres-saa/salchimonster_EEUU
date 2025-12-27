@@ -99,7 +99,7 @@ const props = defineProps({
 const store = useSitesStore()
 
 /* ================== CONFIG DOMINIO ================== */
-const MAIN_DOMAIN = 'salchimonster.com'
+const MAIN_DOMAIN = 'usa.salchimonster.com'
 
 /* ================== ESTADOS ================== */
 const spinnersView = ref({ ciudad: false, barrio: false })
