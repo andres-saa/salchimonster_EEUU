@@ -298,7 +298,7 @@ const I18N = {
     generate_order_link: 'Generar Pedido / Link',
     pay_with_card: 'Pagar con tarjeta',
     payment_loading_try_again: 'Cargando pasarela de pagos, intenta de nuevo en un momento...',
-    delivery_required: 'Selecciona una dirección válida para calcular el domicilio (no puede ser $0).',
+    delivery_required: 'Selecciona una dirección válida ',
     invalid_delivery_value: 'En delivery el domicilio debe ser mayor a 0.'
   },
   en: {
@@ -320,7 +320,7 @@ const I18N = {
     generate_order_link: 'Generate Order / Link',
     pay_with_card: 'Pay with card',
     payment_loading_try_again: 'Loading payment gateway, please try again in a moment...',
-    delivery_required: 'Select a valid address to calculate delivery (it cannot be $0).',
+    delivery_required: 'Select a valid address',
     invalid_delivery_value: 'For delivery, the fee must be greater than 0.'
   }
 }
@@ -642,7 +642,7 @@ const payWithEpayco = (id) => {
 .value { font-weight: 600; }
 
 .discount { color: var(--success-text); }
-.free-delivery { color: var(--success-text); font-weight: 700; font-size: 0.8rem; }
+.free-delivery { color: var(--success-text); font-weight: 700; font-size: 0.8rem;padding-left: 1rem; }
 
 .final-total {
   margin-top: 0.5rem;
