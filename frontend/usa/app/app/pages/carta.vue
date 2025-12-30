@@ -51,7 +51,7 @@
       </Transition>
     </Teleport>
 
-    <!-- <a
+    <a
       href="https://local.bot.salchimonster.com/ubicacion/1"
       class="promo-fab"
       :class="{ 'is-hidden': isScrolling }"
@@ -60,7 +60,7 @@
       <div class="fab-content">
         <img class="fab-icon" :src="`${URI}/read-photo-product/5Dqs9XtT`" alt="Promos">
       </div>
-    </a> -->
+    </a>
 
   </div>
 </template>

@@ -1,5 +1,6 @@
 <template>
   <div class="checkout-page">
+
     <!-- ================== OVERLAY REDIRECCIÓN ================== -->
     <Transition name="fade">
       <div v-if="isRedirecting" class="redirect-overlay">
@@ -15,7 +16,7 @@
       </div>
     </Transition>
 
-    <!-- ================== MODAL DIRECCIÓN (GOOGLE) ================== -->
+    <!-- ================== MODAL DIRECCIÓN (NATIVO) ================== -->
     <Transition name="modal-fade">
       <div v-if="see_sites" class="modal-backdrop" @click.self="closeModal">
         <div class="modal-container">
@@ -57,7 +58,7 @@
 
             <div v-if="isValidating" class="loading-state">
               <Icon name="svg-spinners:90-ring-with-bg" size="32" />
-              <span>{{ t('checking_coverage') }}</span>
+              <span>Verificando cobertura...</span>
             </div>
 
             <div
@@ -98,11 +99,7 @@
 
           <footer class="modal-footer">
             <button class="btn btn-secondary" @click="closeModal">{{ t('cancel') }}</button>
-            <button
-              class="btn btn-primary"
-              @click="confirmSelection"
-              :disabled="!tempSiteData?.in_coverage || isRedirecting"
-            >
+            <button class="btn btn-primary" @click="confirmSelection" :disabled="!tempSiteData?.in_coverage || isRedirecting">
               {{ t('save') }}
             </button>
           </footer>
@@ -206,18 +203,18 @@
           <section class="card form-section">
             <h2 class="section-title">
               {{
-                isPickup
-                  ? (user.user.order_type?.id === 6 ? 'EN EL LOCAL' : t('site_recoger'))
+                [2, 6].includes(user.user.order_type?.id)
+                  ? (user.user.order_type?.id === 6 ? 'En el Local' : t('site_recoger'))
                   : t('address')
               }}
             </h2>
 
             <!-- DELIVERY -->
-            <div v-if="!isPickup" class="address-selector">
+            <div v-if="!user.user.order_type || ![2, 6].includes(user.user.order_type.id)" class="address-selector">
               <div
                 class="address-card"
                 :class="{ 'has-address': user.user.address, 'no-address': !user.user.address }"
-                @click="openAddressModal('click')"
+                @click="openAddressModal"
               >
                 <div class="icon-box-addr">
                   <Icon name="mdi:map-marker" />
@@ -228,15 +225,13 @@
                   <span v-else class="addr-placeholder">{{ t('address_placeholder') }}</span>
 
                   <div v-if="user.user.address" class="addr-meta">
-                    <!-- ✅ NUNCA "Gratis" en DELIVERY -->
                     <span class="badge badge-delivery">
                       {{
-                        siteStore?.location?.neigborhood?.delivery_price > 0
+                        siteStore?.location?.neigborhood?.delivery_price != null
                           ? formatCOP(siteStore.location.neigborhood.delivery_price)
-                          : t('select_address_to_calculate')
+                          : (lang === 'en' ? 'Free Shipping' : 'Envío Gratis')
                       }}
                     </span>
-
                     <span v-if="siteStore?.location?.site?.site_name" class="site-name">
                       • {{ lang === 'en' ? 'From' : 'Desde' }} {{ siteStore.location.site.site_name }}
                     </span>
@@ -249,9 +244,9 @@
               </div>
             </div>
 
-            <!-- PICKUP / ESTOY AQUÍ -->
+            <!-- PICKUP -->
             <div v-else class="address-selector">
-              <div class="address-card has-address" @click="openPickupDialog">
+              <div class="address-card has-address" @click="siteStore.setVisible('currentSiteRecoger', true)">
                 <div class="icon-box-addr pickup"><Icon name="mdi:store-marker" /></div>
                 <div class="addr-info">
                   <span class="addr-title">{{ siteStore?.location?.site?.site_name || t('site_selector') }}</span>
@@ -265,7 +260,7 @@
                 class="form-group mt-3"
               >
                 <label>{{ t('vehicle_plate') }}</label>
-                <InputText type="text" class="input-modern" v-model="user.user.placa" placeholder="ABC-123" />
+                <input type="text" class="input-modern" v-model="user.user.placa" placeholder="ABC-123" />
               </div>
             </div>
           </section>
@@ -274,7 +269,7 @@
           <section class="card form-section">
             <h2 class="section-title">Pago & Detalles</h2>
 
-            <!-- ✅ CUPONES -->
+            <!-- ✅ CUPONES (NO se valida por cada caracter; SOLO con "Aplicar") -->
             <div class="coupon-wrapper">
               <div class="coupon-toggle" @click="toggleCouponUi">
                 <div class="coupon-left">
@@ -311,14 +306,11 @@
                     :disabled="!temp_discount || isApplyingCoupon"
                     type="button"
                   >
-                    {{
-                      isApplyingCoupon
-                        ? (lang === 'en' ? 'Applying...' : 'Aplicando...')
-                        : (lang === 'en' ? 'Apply' : 'Aplicar')
-                    }}
+                    {{ isApplyingCoupon ? (lang === 'en' ? 'Applying...' : 'Aplicando...') : (lang === 'en' ? 'Apply' : 'Aplicar') }}
                   </button>
                 </div>
 
+                <!-- ✅ Feedback (incluye error backend {"detail":"..."}) -->
                 <div
                   v-if="temp_code?.status"
                   class="coupon-feedback"
@@ -352,15 +344,15 @@
 
             <!-- PAGO -->
             <div class="form-group" v-if="computedPaymentOptions.length > 0">
-              <label>{{ t('payment_method') }}</label>
-
+                            <label>{{ t('payment_method') }}</label>
+            
               <Select
-                v-model="user.user.payment_method_option"
-                :options="computedPaymentOptions"
-                optionLabel="name"
-                placeholder="Selecciona una opción"
-                class="pv-select pv-select-payment input-modern with-icon"
-              />
+              v-model="user.user.payment_method_option"
+              :options="computedPaymentOptions"
+              optionLabel="name"
+              placeholder="Selecciona una opción"
+              class="pv-select pv-select-payment input-modern with-icon"
+            />
             </div>
 
             <div class="form-group" style="margin-top: 1rem;">
@@ -375,14 +367,16 @@
           </section>
         </div>
 
-        <resumen />
+        
+          <resumen />
+ 
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import resumen from '../resumen.vue'
 import { usecartStore, useSitesStore, useUserStore } from '#imports'
 import { URI } from '~/service/conection'
@@ -417,6 +411,7 @@ const generateUUID = () => {
     return v.toString(16)
   })
 }
+
 const apiFetch = async (url) => (await fetch(url)).json()
 
 const pickCoupon = (payload) => {
@@ -437,22 +432,11 @@ const getErrorDetail = (payload) => {
 /* ================= Config ================= */
 const uri_api_google = 'https://api.locations.salchimonster.com'
 const sitePaymentsComplete = ref([])
-const MAIN_DOMAIN = 'usa.salchimonster.com'
+const MAIN_DOMAIN = 'salchimonster.com'
 
 /* ================= Redirect overlay ================= */
 const isRedirecting = ref(false)
 const targetSiteName = ref('')
-
-/* ================= Pickup (RECIBIR / ESTOY AQUÍ) ================= */
-const isPickup = computed(() => [2, 6].includes(Number(user.user.order_type?.id)))
-const isDelivery = computed(() => !isPickup.value)
-
-/* ✅ Regla dura: delivery_cost_cop debe ser > 0 si es DELIVERY */
-const isValidDeliveryCost = (v) => {
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0
-}
-const normalizeDeliveryCost = (v) => (isValidDeliveryCost(v) ? Number(v) : null)
 
 /* ================= i18n ================= */
 const lang = computed(() =>
@@ -483,9 +467,7 @@ const DICT = {
     additional_notes: 'Ej: Timbre dañado, dejar en portería...',
     search_country_or_code: 'Buscar país...',
     address: 'Dirección de Entrega',
-    code_placeholder: 'Ingresa el código',
-    checking_coverage: 'Verificando cobertura...',
-    select_address_to_calculate: 'Selecciona dirección'
+    code_placeholder: 'Ingresa el código'
   },
   en: {
     finalize_purchase: 'Checkout',
@@ -510,23 +492,19 @@ const DICT = {
     additional_notes: 'Ex: Doorbell broken...',
     search_country_or_code: 'Search country...',
     address: 'Delivery Address',
-    code_placeholder: 'Enter code',
-    checking_coverage: 'Checking coverage...',
-    select_address_to_calculate: 'Select address'
+    code_placeholder: 'Enter code'
   }
 }
 const t = (key) => DICT[lang.value]?.[key] || DICT.es[key] || key
 
-/* ✅ Si llega 0 en delivery, NO se muestra como “Gratis”: queda “--” */
-const formatCOP = (v) => {
-  const n = Number(v)
-  if (!Number.isFinite(n) || n <= 0) return '--'
-  return new Intl.NumberFormat(lang.value === 'en' ? 'en-CO' : 'es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0
-  }).format(n)
-}
+const formatCOP = (v) =>
+  v === 0
+    ? 'Gratis'
+    : new Intl.NumberFormat(lang.value === 'en' ? 'en-CO' : 'es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0
+      }).format(v)
 
 /* ================= Modal Google ================= */
 const see_sites = ref(false)
@@ -538,100 +516,43 @@ const sessionToken = ref(null)
 const tempSiteData = ref(null)
 const addressInputRef = ref(null)
 
-/* ✅ Auto-open del modal (para que “abra el modal”) */
-const autoOpenedOnce = ref(false)
-const dismissedOnce = ref(false)
-
-const needsAddressModal = computed(() => {
-  if (!isDelivery.value) return false
-  const hasAddr = !!(user.user.address || store.address_details?.formatted_address || user.user.site?.formatted_address)
-  const rawCost =
-    siteStore.location?.neigborhood?.delivery_price ??
-    store.address_details?.delivery_cost_cop ??
-    user.user.site?.delivery_cost_cop ??
-    null
-  const cost = normalizeDeliveryCost(rawCost)
-  // si no hay dirección o no hay costo válido -> debe abrir modal
-  return !hasAddr || cost == null
-})
-
-const focusAddressInput = async () => {
-  await nextTick()
-  await nextTick()
-  addressInputRef.value?.focus?.()
-}
-
-const openAddressModal = async (reason = 'auto') => {
-  // si pickup, no tiene sentido abrir modal google
-  if (isPickup.value) return
-
-  dismissedOnce.value = false
-
+const openAddressModal = () => {
   addressQuery.value = ''
   tempSiteData.value = null
   dir_options.value = []
   see_sites.value = true
   if (!sessionToken.value) sessionToken.value = generateUUID()
-
-  await focusAddressInput()
-
-  if (reason === 'auto') autoOpenedOnce.value = true
 }
 
 const closeModal = () => {
   see_sites.value = false
   sessionToken.value = null
-
-  // ✅ si el usuario lo cerró manualmente, no lo re-abras en loop
-  if (autoOpenedOnce.value) dismissedOnce.value = true
 }
-
-/* ✅ abre automáticamente cuando estás en DELIVERY y falta dirección/costo */
-const maybeAutoOpenAddressModal = async () => {
-  if (isPickup.value) return
-  if (see_sites.value) return
-  if (isRedirecting.value) return
-  if (!needsAddressModal.value) {
-    // si ya está bien, permite que en el futuro vuelva a auto-abrir si se vuelve a dañar
-    dismissedOnce.value = false
-    return
-  }
-  // si ya lo auto-abrió y el usuario lo cerró, no lo abras en bucle
-  if (autoOpenedOnce.value && dismissedOnce.value) return
-  await openAddressModal('auto')
-}
-
-/* Debounce de búsqueda */
-const searchTimer = ref(null)
 
 const onSearchInput = async () => {
   tempSiteData.value = null
   showAddressSuggestions.value = true
 
-  if (searchTimer.value) clearTimeout(searchTimer.value)
+  if (!addressQuery.value.trim()) {
+    dir_options.value = []
+    return
+  }
 
-  searchTimer.value = setTimeout(async () => {
-    if (!addressQuery.value.trim()) {
-      dir_options.value = []
-      return
-    }
+  const city = siteStore.location?.site?.city_name || ''
+  const params = new URLSearchParams({
+    input: addressQuery.value,
+    session_token: sessionToken.value,
+    language: lang.value,
+    city,
+    limit: '5'
+  })
 
-    const city = siteStore.location?.site?.city_name || ''
-    const params = new URLSearchParams({
-      input: addressQuery.value,
-      session_token: sessionToken.value,
-      language: lang.value,
-      city,
-      limit: '5'
-    })
-
-    try {
-      const res = await (await fetch(`${uri_api_google}/places/autocomplete?${params}`)).json()
-      dir_options.value = (res.predictions || res).filter((p) => p?.place_id)
-    } catch (e) {
-      dir_options.value = []
-    }
-  }, 180)
+  try {
+    const res = await (await fetch(`${uri_api_google}/places/autocomplete?${params}`)).json()
+    dir_options.value = (res.predictions || res).filter((p) => p?.place_id)
+  } catch (e) {
+    dir_options.value = []
+  }
 }
 
 const clearSearch = () => {
@@ -654,29 +575,11 @@ const onAddressSelect = async (item) => {
     })
     const details = await (await fetch(`${uri_api_google}/places/coverage-details?${params}`)).json()
 
-    const normalizedCost = normalizeDeliveryCost(details?.delivery_cost_cop)
-
-    const inCoverageStrict =
-      !details?.error &&
-      !!details?.nearest?.in_coverage &&
-      (isDelivery.value ? normalizedCost != null : true)
-
     tempSiteData.value = {
       ...details,
-      delivery_cost_cop: isDelivery.value ? normalizedCost : (details?.delivery_cost_cop ?? null),
       formatted_address: details.formatted_address || item.description,
       status: 'checked',
-      in_coverage: inCoverageStrict,
-      error:
-        inCoverageStrict
-          ? null
-          : (details?.error ||
-              (isDelivery.value && normalizedCost == null
-                ? {
-                    message_es: 'No pudimos calcular el costo de domicilio para esta dirección. Elige otra dirección.',
-                    message_en: 'We could not calculate the delivery fee for this address. Please choose another one.'
-                  }
-                : null))
+      in_coverage: !details.error && details.nearest?.in_coverage
     }
   } catch (e) {
     tempSiteData.value = {
@@ -690,21 +593,9 @@ const onAddressSelect = async (item) => {
   }
 }
 
-/* ================= Confirm / Redirect (GOOGLE DELIVERY) ================= */
+/* ================= Confirm / Redirect ================= */
 const confirmSelection = async () => {
   if (!tempSiteData.value?.in_coverage) return
-
-  if (isDelivery.value && !isValidDeliveryCost(tempSiteData.value?.delivery_cost_cop)) {
-    tempSiteData.value = {
-      ...tempSiteData.value,
-      in_coverage: false,
-      error: {
-        message_es: 'Costo de domicilio inválido (0). Elige otra dirección.',
-        message_en: 'Invalid delivery fee (0). Please choose another address.'
-      }
-    }
-    return
-  }
 
   const currentSiteId = siteStore.location?.site?.site_id
   const newSiteId = tempSiteData.value.nearest?.site?.site_id
@@ -725,33 +616,15 @@ const applySiteSelection = (data) => {
   user.user.lng = data.lng
   user.user.place_id = data.place_id
 
+  // sitio real
   siteStore.location.site = data.nearest?.site || siteStore.location.site
   store.address_details = data
 
-  const normalized = isPickup.value ? 0 : normalizeDeliveryCost(data.delivery_cost_cop)
-
-  if (!siteStore.location.neigborhood) {
-    siteStore.location.neigborhood = {
-      name: '',
-      delivery_price: null,
-      neighborhood_id: null,
-      id: null,
-      site_id: null
-    }
-  }
-
-  if (isPickup.value) {
-    siteStore.location.neigborhood.delivery_price = 0
-    siteStore.current_delivery = 0
-  } else {
-    siteStore.location.neigborhood.delivery_price = normalized
-    siteStore.current_delivery = normalized
+  if (data.delivery_cost_cop != null) {
+    siteStore.location.neigborhood.delivery_price = data.delivery_cost_cop
   }
 
   ensureValidOrderTypeForCurrentSite()
-
-  // ✅ al guardar una dirección válida, ya no es “dismissed”
-  dismissedOnce.value = false
 }
 
 const handleSiteChange = async (newData) => {
@@ -804,60 +677,6 @@ const handleSiteChange = async (newData) => {
     isRedirecting.value = false
   }
 }
-
-/* ================= Pickup Dialog ================= */
-const openPickupDialog = async () => {
-  await nextTick()
-  siteStore.setVisible('site_recoger', true)
-}
-
-// ✅ cuando cambie el tipo de orden a recoger / estoy aquí -> abre dialog automáticamente
-watch(
-  () => user.user.order_type?.id,
-  async (id) => {
-    const isPk = [2, 6].includes(Number(id))
-
-    // ✅ reset auto-open flags al cambiar tipo
-    autoOpenedOnce.value = false
-    dismissedOnce.value = false
-
-    if (isPk) {
-      if (!siteStore.location?.site?.site_id) {
-        openPickupDialog()
-      }
-
-      user.user.site = siteStore.location?.site || user.user.site
-      user.user.address =
-        siteStore.location?.site?.site_address ||
-        siteStore.location?.site?.site_name ||
-        user.user.address
-
-      user.user.lat = null
-      user.user.lng = null
-      user.user.place_id = null
-      user.user.site = siteStore.location?.site
-    } else {
-      siteStore.setVisible('site_recoger', false)
-      // ✅ si ahora es delivery y falta dirección/costo => abre modal
-      await nextTick()
-      await maybeAutoOpenAddressModal()
-    }
-  },
-  { immediate: true }
-)
-
-// ✅ si el usuario elige sede desde el dialog, reflejarlo en el user cuando está en pickup
-watch(
-  () => siteStore.location?.site?.site_id,
-  () => {
-    if (!isPickup.value) return
-    user.user.site = siteStore.location?.site
-    user.user.address =
-      siteStore.location?.site?.site_address ||
-      siteStore.location?.site?.site_name ||
-      ''
-  }
-)
 
 /* ================= Teléfono ================= */
 const phoneError = ref('')
@@ -961,79 +780,37 @@ const ensureValidOrderTypeForCurrentSite = () => {
     user.user.order_type = null
     return
   }
-
   const currentId = user.user.order_type?.id
-  if (currentId && list.some((o) => Number(o.id) === Number(currentId))) return
-
-  const hasDeliveryAddress =
-    !!user.user.address || !!user.user.site?.formatted_address || !!store.address_details?.formatted_address
-
-  const preferred =
-    hasDeliveryAddress
-      ? list.find((o) => ![2, 6].includes(Number(o.id)))
-      : list[0]
-
-  user.user.order_type = preferred || list[0]
-}
-
-/* ✅ Sync: delivery nunca queda en 0 */
-function syncDeliveryPrice() {
-  const pickupLocal = [2, 6].includes(Number(user.user.order_type?.id))
-
-  if (!siteStore.location.neigborhood) {
-    siteStore.location.neigborhood = {
-      name: '',
-      delivery_price: null,
-      neighborhood_id: null,
-      id: null,
-      site_id: null
-    }
+  if (!currentId || !list.some((o) => Number(o.id) === Number(currentId))) {
+    user.user.order_type = list[0]
   }
-
-  if (pickupLocal) {
-    siteStore.location.neigborhood.delivery_price = 0
-    siteStore.current_delivery = 0
-    return
-  }
-
-  const raw =
-    user.user.site?.delivery_cost_cop ??
-    store.address_details?.delivery_cost_cop ??
-    siteStore.current_delivery ??
-    siteStore.location.neigborhood.delivery_price ??
-    null
-
-  const cost = normalizeDeliveryCost(raw)
-
-  siteStore.location.neigborhood.delivery_price = cost
-  siteStore.current_delivery = cost
 }
 
 watch(
-  () => [
-    user.user.order_type?.id,
-    user.user.site?.delivery_cost_cop,
-    store.address_details?.delivery_cost_cop,
-    siteStore.current_delivery,
-    user.user.address
-  ],
-  async () => {
-    syncDeliveryPrice()
+  () => user.user.order_type,
+  (newType) => {
+    if (newType?.id === 2 || newType?.id === 6) {
+      siteStore.location.neigborhood.delivery_price = 0
+    } else {
+      const cost = user.user.site?.delivery_cost_cop ?? siteStore?.delivery_price
+      if (cost != null) siteStore.location.neigborhood.delivery_price = cost
+    }
 
     const currentMethodId = user.user.payment_method_option?.id
     const availableMethods = computedPaymentOptions.value
     if (!availableMethods.some((m) => m.id === currentMethodId)) {
       user.user.payment_method_option = null
     }
-
-    // ✅ si estás en delivery y falta dirección/costo => abre modal
-    await nextTick()
-    await maybeAutoOpenAddressModal()
-  },
-  { immediate: true }
+  }
 )
 
-/* ================= CUPONES ================= */
+/* ================= CUPONES (FIX) =================
+   ✅ Switch YA NO se traba:
+   - Ahora el switch depende SOLO de store.coupon_ui.enabled
+   - Si el usuario lo apaga: removeCoupon + enabled=false
+   ✅ Validación SOLO con botón "Aplicar" (no por cada tecla)
+   ✅ Muestra error backend: {"detail":"..."} en el feedback
+*/
 const have_discount = computed({
   get: () => !!store.coupon_ui?.enabled,
   set: (v) => store.setCouponUi({ enabled: !!v })
@@ -1051,14 +828,19 @@ const toggleCouponUi = () => {
   const next = !have_discount.value
 
   if (!next) {
+    // apagar
     have_discount.value = false
     temp_code.value = {}
     store.removeCoupon()
+    // opcional: limpiar lo escrito al apagar
+    // store.setCouponUi({ draft_code: '' })
   } else {
+    // encender
     have_discount.value = true
   }
 }
 
+// Mantén UI coherente cuando se aplica/quita cupón desde otros lugares
 watch(
   () => store.applied_coupon,
   (newCoupon) => {
@@ -1076,6 +858,7 @@ watch(
   { immediate: true, deep: true }
 )
 
+// Si cambias de sede y ya hay cupón aplicado, revalida silencioso (opcional)
 watch(
   () => siteStore.location?.site?.site_id,
   async () => {
@@ -1090,10 +873,7 @@ const validateDiscount = async (code, opts = { silent: false }) => {
   const site = siteStore.location?.site
 
   if (!site) {
-    temp_code.value = {
-      status: 'error',
-      detail: lang.value === 'en' ? 'Select a site first' : 'Selecciona una sede primero'
-    }
+    temp_code.value = { status: 'error', detail: lang.value === 'en' ? 'Select a site first' : 'Selecciona una sede primero' }
     return
   }
 
@@ -1107,10 +887,7 @@ const validateDiscount = async (code, opts = { silent: false }) => {
 
     const backendDetail = getErrorDetail(payload)
     if (!r.ok || backendDetail) {
-      temp_code.value = {
-        status: 'invalid',
-        detail: backendDetail || (lang.value === 'en' ? 'Invalid code' : 'Código no válido')
-      }
+      temp_code.value = { status: 'invalid', detail: backendDetail || (lang.value === 'en' ? 'Invalid code' : 'Código no válido') }
       store.removeCoupon()
       return
     }
@@ -1123,10 +900,7 @@ const validateDiscount = async (code, opts = { silent: false }) => {
     }
 
     if (Array.isArray(coupon.sites) && !coupon.sites.some((s) => String(s.site_id) === String(site.site_id))) {
-      temp_code.value = {
-        status: 'invalid_site',
-        detail: lang.value === 'en' ? 'Not valid for this site' : 'No válido en esta sede'
-      }
+      temp_code.value = { status: 'invalid_site', detail: lang.value === 'en' ? 'Not valid for this site' : 'No válido en esta sede' }
       store.removeCoupon()
       return
     }
@@ -1138,6 +912,7 @@ const validateDiscount = async (code, opts = { silent: false }) => {
       discount_name: coupon.discount_name || coupon.name || 'Descuento'
     }
 
+    // asegura switch ON si aplicó bien
     store.setCouponUi({ enabled: true, draft_code: coupon.code || finalCode })
   } catch (e) {
     console.error(e)
@@ -1151,11 +926,26 @@ const validateDiscount = async (code, opts = { silent: false }) => {
 const clearCoupon = () => {
   temp_code.value = {}
   store.removeCoupon()
+  // deja switch prendido y el input editable (UX)
   store.setCouponUi({ enabled: true, draft_code: '' })
 }
 
 /* ================= Mount ================= */
 onMounted(async () => {
+
+
+
+
+    if (user.user.order_type?.id === 2 || user.user.order_type?.id === 6) {
+      siteStore.location.neigborhood.delivery_price = 0
+    } else {
+      const cost = user.user.site?.delivery_cost_cop ?? siteStore?.delivery_price
+      if (cost != null) siteStore.location.neigborhood.delivery_price = cost
+    }
+
+
+
+
   initCountries()
   if (!user.user.phone_code) {
     const defaultCode = lang.value === 'en' ? 'US' : 'CO'
@@ -1169,17 +959,12 @@ onMounted(async () => {
   } catch (e) {
     console.error('Error loading payment config', e)
   }
-
-  // ✅ al entrar a la página: si es delivery y falta dirección/costo, abre modal
-  await nextTick()
-  await maybeAutoOpenAddressModal()
 })
 
 watch(lang, initCountries)
 </script>
 
 <style scoped>
-/* (tu CSS igual, lo dejé tal cual) */
 /* =========================================
    VARIABLES & TEMA
    ========================================= */
@@ -1287,7 +1072,11 @@ watch(lang, initCountries)
 
 label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
 
-.input-modern { width: 100%; }
+.input-modern {
+  width: 100%;
+ 
+}
+.input-modern:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
 textarea.input-modern { resize: vertical; min-height: 80px; }
 
 /* Selector Teléfono */
@@ -1343,6 +1132,7 @@ textarea.input-modern { resize: vertical; min-height: 80px; }
   font-size: 1.2rem; color: #666;
 }
 .has-address .icon-box-addr { background: #000; color: #fff; }
+.pickup .icon-box-addr { background: #000; color: #fff; }
 
 .addr-info { flex: 1; display: flex; flex-direction: column; }
 .addr-title { font-weight: 600; font-size: 0.95rem; }
@@ -1381,6 +1171,11 @@ textarea.input-modern { resize: vertical; min-height: 80px; }
 .feedback-info { display: flex; flex-direction: column; }
 .discount-title { font-weight: 700; color: #065f46; font-size: 0.9rem; text-transform: uppercase; }
 .discount-amount { font-size: 0.85rem; color: #047857; margin-top: 2px; }
+
+.select-wrapper { position: relative; }
+ 
+.select-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none; }
+.select-arrow { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2rem; }
 
 /* =========================================
    MODAL DE DIRECCIÓN

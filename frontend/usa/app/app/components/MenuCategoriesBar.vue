@@ -136,17 +136,15 @@ onBeforeUnmount(() => {
    Esta animación se ejecuta cada vez que cambia el :key (isPinned)
 */
 .fade-in-teleport {
-  animation: teleportAppear 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: teleportAppear .3s ease ;
 }
 
 @keyframes teleportAppear {
   0% {
     opacity: 0;
-    transform: translateY(-5px) scale(0.98); /* Entra ligeramente desde arriba y un poco más pequeño */
   }
-  50% {
+  100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 

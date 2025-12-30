@@ -1,11 +1,18 @@
+<!-- pages/rastrear.vue (o el componente que uses para /rastrear) -->
 <template>
   <div class="track-page">
     <main class="track-main">
       <section class="track-card animate-entry">
         <header class="track-card__header">
-          <h1 class="track-title">Rastrea tu pedido</h1>
+          <h1 class="track-title">{{ t('title', 'Rastrea tu pedido', 'Track your order') }}</h1>
           <p class="track-subtitle">
-            Ingresa el ID de tu pedido para ver su estado actual y el historial.
+            {{
+              t(
+                'subtitle',
+                'Ingresa el ID de tu pedido para ver su estado actual y el historial.',
+                'Enter your order ID to see its current status and history.'
+              )
+            }}
           </p>
         </header>
 
@@ -16,7 +23,8 @@
               v-model="orderId"
               type="text"
               class="search-input"
-              placeholder="Ejemplo: MOD-0054..."
+              :placeholder="t('placeholder', 'Ejemplo: MOD-0054...', 'Example: MOD-0054...')"
+              autocomplete="off"
             />
           </div>
 
@@ -36,7 +44,7 @@
           <Transition name="fade" mode="out-in">
             <div v-if="loading" class="alert alert--info" key="loading">
               <Icon name="mdi:clock-outline" class="alert__icon" />
-              <span>Buscando tu pedido...</span>
+              <span>{{ t('searching', 'Buscando tu pedido...', 'Searching your order...') }}</span>
             </div>
 
             <div v-else-if="error" class="alert alert--error" key="error">
@@ -51,40 +59,23 @@
             v-if="!loading && !error && currentStatus"
             class="current-status"
           >
-            <h2 class="current-status__title">¡Gracias por tu compra!</h2>
+            <h2 class="current-status__title">
+              {{ t('thanks', '¡Gracias por tu compra!', 'Thanks for your purchase!') }}
+            </h2>
 
-            <p
-              v-if="currentStatus.status === 'generada'"
-              class="current-status__text"
-            >
-              Tu pedido ha sido recibido y está en proceso de ser atendido.
-            </p>
-            <p
-              v-else-if="currentStatus.status === 'en preparacion'"
-              class="current-status__text"
-            >
-              Tu pedido se encuentra en preparación y en breve estará listo para
-              enviarse.
-            </p>
-            <p
-              v-else-if="currentStatus.status === 'enviada'"
-              class="current-status__text"
-            >
-              ¡Tu pedido está en camino!
-            </p>
-            <p v-else class="current-status__text">
-              Estado actual: <strong>{{ currentStatus.status }}</strong>
+            <p class="current-status__text">
+              {{ getCurrentStatusMessage(currentStatus.status) }}
             </p>
 
             <div
-              v-if="currentStatus.status === 'enviada'"
+              v-if="normalizeStatus(currentStatus.status) === 'enviada'"
               class="current-status__badge pulse-badge"
             >
               <Icon
                 name="mdi:truck-delivery-outline"
                 class="current-status__badge-icon"
               />
-              <span>Tu pedido está en camino</span>
+              <span>{{ t('on_way', 'Tu pedido está en camino', 'Your order is on the way') }}</span>
             </div>
           </section>
         </Transition>
@@ -99,19 +90,25 @@
           "
           class="history"
         >
-          <h3 class="history__title">Historial de estado</h3>
+          <h3 class="history__title">
+            {{ t('history', 'Historial de estado', 'Status history') }}
+          </h3>
 
           <TransitionGroup name="list" tag="ul" class="status-timeline">
             <li
               v-for="(stat, index) in firstHistory.status_history"
-              :key="stat.timestamp"
+              :key="stat.timestamp + '-' + index"
               class="status-timeline__item"
               :style="{ transitionDelay: `${index * 100}ms` }"
             >
               <div class="status-timeline__marker"></div>
               <div class="status-timeline__content">
-                <p class="status-timeline__status">{{ stat.status }}</p>
-                <p class="status-timeline__timestamp">{{ stat.timestamp }}</p>
+                <p class="status-timeline__status">
+                  {{ translateStatus(stat.status) }}
+                </p>
+                <p class="status-timeline__timestamp">
+                  {{ stat.timestamp }}
+                </p>
               </div>
             </li>
           </TransitionGroup>
@@ -127,7 +124,7 @@
               class="empty-state__icon float-animation"
             />
             <p class="empty-state__text">
-              Ingresa el ID de tu pedido para ver su estado.
+              {{ t('empty', 'Ingresa el ID de tu pedido para ver su estado.', 'Enter your order ID to see its status.') }}
             </p>
           </section>
         </Transition>
@@ -137,18 +134,107 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue"
-import { useRoute, useRouter } from "vue-router"
-import { URI } from "@/service/conection"
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter, useUserStore, texts } from '#imports'
+import { URI } from '@/service/conection'
 
 const route = useRoute()
 const router = useRouter()
+const user = useUserStore()
 
-const orderId = ref("")
+const orderId = ref('')
 const history = ref([])
 const currentStatus = ref(null)
 const loading = ref(false)
 const error = ref(null)
+
+const langKey = computed(() => (user.lang?.name || 'ES').toLowerCase()) // 'es' | 'en'
+
+/**
+ * Traducciones locales (fallbacks)
+ * Si en tu `texts` ya tienes algo como texts.es.track..., esto igual funciona.
+ */
+const localTrackTexts = {
+  es: {
+    title: 'Rastrea tu pedido',
+    subtitle: 'Ingresa el ID de tu pedido para ver su estado actual y el historial.',
+    placeholder: 'Ejemplo: MOD-0054...',
+    searching: 'Buscando tu pedido...',
+    empty: 'Ingresa el ID de tu pedido para ver su estado.',
+    thanks: '¡Gracias por tu compra!',
+    on_way: 'Tu pedido está en camino',
+    err_empty: 'Por favor ingresa el ID de tu pedido.',
+    err_not_found: 'No pudimos encontrar tu pedido. Verifica el ID e inténtalo de nuevo.',
+    err_no_current: 'No encontramos el estado actual de tu pedido.',
+    history: 'Historial de estado',
+
+    // Mensajes por estado (es)
+    msg: {
+      generada: 'Tu pedido ha sido recibido y está en proceso de ser atendido.',
+      'en preparacion': 'Tu pedido se encuentra en preparación y en breve estará listo para enviarse.',
+      enviada: '¡Tu pedido está en camino!',
+      cancelada: 'Tu pedido fue cancelado.',
+      'pago pendiente': 'Tu pago está pendiente. Si ya pagaste, espera un momento y vuelve a intentar.',
+      'transferencia pendiente': 'Tu transferencia está pendiente de confirmación.',
+      'validacion pendiente': 'Tu pedido está pendiente de validación.',
+      'no validada por cliente': 'Tu pedido no fue validado por el cliente.',
+      'in validation': 'Tu pedido está en validación.',
+      archivada: 'Tu pedido fue archivado.',
+      'intento de pago archivado': 'El intento de pago fue archivado.',
+      'domiciliario solicitado': 'Se solicitó un domiciliario para tu pedido.',
+      'no confirmada': 'Tu pedido aún no está confirmado.'
+    }
+  },
+  en: {
+    title: 'Track your order',
+    subtitle: 'Enter your order ID to see its current status and history.',
+    placeholder: 'Example: MOD-0054...',
+    searching: 'Searching your order...',
+    empty: 'Enter your order ID to see its status.',
+    thanks: 'Thanks for your purchase!',
+    on_way: 'Your order is on the way',
+    err_empty: 'Please enter your order ID.',
+    err_not_found: "We couldn't find your order. Check the ID and try again.",
+    err_no_current: "We couldn't find the current status of your order.",
+    history: 'Status history',
+
+    // Mensajes por estado (en)
+    msg: {
+      generada: 'We received your order and it is being processed.',
+      'en preparacion': 'Your order is being prepared and will be ready to be sent soon.',
+      enviada: 'Your order is on the way!',
+      cancelada: 'Your order was cancelled.',
+      'pago pendiente': 'Your payment is pending. If you already paid, wait a moment and try again.',
+      'transferencia pendiente': 'Your transfer is pending confirmation.',
+      'validacion pendiente': 'Your order is pending validation.',
+      'no validada por cliente': 'Your order was not validated by the customer.',
+      'in validation': 'Your order is in validation.',
+      archivada: 'Your order was archived.',
+      'intento de pago archivado': 'The payment attempt was archived.',
+      'domiciliario solicitado': 'A courier was requested for your order.',
+      'no confirmada': 'Your order is not confirmed yet.'
+    }
+  }
+}
+
+/** Helper tipo tu `tl` */
+const t = (key, esFallback, enFallback) => {
+  const lk = langKey.value
+  // 1) intenta texts (si tú lo tienes centralizado)
+  const fromTexts =
+    texts?.[lk]?.track?.[key] ??
+    texts?.[lk]?.common?.[key] ??
+    null
+
+  if (fromTexts) return fromTexts
+
+  // 2) fallback local
+  const local = localTrackTexts?.[lk]?.[key]
+  if (local) return local
+
+  // 3) fallback por parámetros
+  return lk === 'en' ? (enFallback ?? esFallback ?? key) : (esFallback ?? enFallback ?? key)
+}
 
 const firstHistory = computed(() => {
   return Array.isArray(history.value) && history.value.length > 0
@@ -156,20 +242,66 @@ const firstHistory = computed(() => {
     : null
 })
 
+const normalizeStatus = (s) => String(s ?? '').trim().toLowerCase()
+
+/**
+ * ✅ Traducción de estados:
+ * - En ES: muestra tal cual (pero normalizado para buscar mensajes)
+ * - En EN: si existe traducción, la muestra; si no, devuelve lo de DB (en español)
+ */
+const statusTranslationsEN = {
+  'no confirmada': 'Unconfirmed',
+  'cancelada': 'Cancelled',
+  'in validation': 'In validation',
+  'no validada por cliente': 'Not validated by customer',
+  'intento de pago archivado': 'Payment attempt archived',
+  'validacion pendiente': 'Validation pending',
+  'enviada': 'Shipped',
+  'generada': 'Created',
+  'pago pendiente': 'Payment pending',
+  'domiciliario solicitado': 'Courier requested',
+  'transferencia pendiente': 'Transfer pending',
+  'archivada': 'Archived',
+  'en preparacion': 'In preparation'
+}
+
+const translateStatus = (statusFromDB) => {
+  const original = String(statusFromDB ?? '').trim()
+  const norm = normalizeStatus(original)
+
+  // ES: deja el texto original (como viene DB)
+  if (langKey.value !== 'en') return original || ''
+
+  // EN: traduce si hay match; si no, devuelve original (en español)
+  return statusTranslationsEN[norm] || original
+}
+
+const getCurrentStatusMessage = (statusFromDB) => {
+  const original = String(statusFromDB ?? '').trim()
+  const norm = normalizeStatus(original)
+
+  // Mensaje por estado (fallback si no existe: muestra "Estado actual: X" traducido)
+  const lk = langKey.value
+  const msg = localTrackTexts?.[lk]?.msg?.[norm]
+
+  if (msg) return msg
+
+  // si no lo tenemos, mostramos lo que viene de DB en español (pedido por ti),
+  // y el prefijo se traduce según idioma.
+  const prefix = lk === 'en' ? 'Current status:' : 'Estado actual:'
+  return `${prefix} ${lk === 'en' ? (translateStatus(original) || original) : (original || '')}`
+}
+
 const setOrderIdInUrl = async (id) => {
-  // ✅ mantiene cualquier otro query existente
   const nextQuery = { ...route.query, order_id: id }
-  // ✅ cambia la URL sin recargar (no ensucia el historial)
   await router.replace({ query: nextQuery })
-  // Si quieres que el botón "atrás" vuelva al query anterior, usa:
-  // await router.push({ query: nextQuery })
 }
 
 const getStatusHistory = async () => {
-  const id = (orderId.value || "").trim()
+  const id = (orderId.value || '').trim()
 
   if (!id) {
-    error.value = "Por favor ingresa el ID de tu pedido."
+    error.value = t('err_empty', 'Por favor ingresa el ID de tu pedido.', 'Please enter your order ID.')
     currentStatus.value = null
     history.value = []
     return
@@ -181,25 +313,22 @@ const getStatusHistory = async () => {
   history.value = []
 
   try {
-    // ✅ 1) Actualiza la URL al buscar
     await setOrderIdInUrl(id)
 
-    // ✅ 2) Consulta el historial
     const result = await $fetch(`${URI}/history-my-orden/${id}`)
 
-    // Timeout estético opcional
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    // timeout estético
+    await new Promise((resolve) => setTimeout(resolve, 450))
 
     history.value = Array.isArray(result) ? result : []
     currentStatus.value = history.value[0]?.current_status || null
 
     if (!currentStatus.value) {
-      error.value = "No encontramos el estado actual de tu pedido."
+      error.value = t('err_no_current', 'No encontramos el estado actual de tu pedido.', "We couldn't find the current status of your order.")
     }
   } catch (err) {
-    console.error("Error al obtener el historial de estado:", err)
-    error.value =
-      "No pudimos encontrar tu pedido. Verifica el ID e inténtalo de nuevo."
+    console.error('Error al obtener el historial de estado:', err)
+    error.value = t('err_not_found', 'No pudimos encontrar tu pedido. Verifica el ID e inténtalo de nuevo.', "We couldn't find your order. Check the ID and try again.")
     history.value = []
     currentStatus.value = null
   } finally {
@@ -207,11 +336,36 @@ const getStatusHistory = async () => {
   }
 }
 
+const lastLoadedId = ref('')
+
+// ✅ si cambia el query manualmente, también carga
+watch(
+  () => route.query.order_id || route.query.id,
+  (newVal) => {
+    const id = newVal ? String(newVal).trim() : ''
+    if (!id) return
+    if (id === lastLoadedId.value) return
+    orderId.value = id
+    lastLoadedId.value = id
+    getStatusHistory()
+  },
+  { immediate: false }
+)
+
+// ✅ si el usuario escribe, limpiamos el error suavemente
+watch(
+  () => orderId.value,
+  () => {
+    if (error.value) error.value = null
+  }
+)
+
 onMounted(() => {
-  // ✅ acepta ?order_id=XXX o ?id=XXX
   const idFromUrl = route.query.order_id || route.query.id
   if (idFromUrl) {
-    orderId.value = String(idFromUrl)
+    const id = String(idFromUrl).trim()
+    orderId.value = id
+    lastLoadedId.value = id
     getStatusHistory()
   }
 })
@@ -304,11 +458,6 @@ onMounted(() => {
   font-size: 1.1rem;
   color: #9ca3af;
   transition: color 0.3s ease;
-}
-
-.search-input:focus ~ .search-input-icon,
-.search-input:focus + .search-input-icon {
-  color: var(--primary-color);
 }
 
 .search-input-wrapper:focus-within .search-input-icon {
@@ -497,7 +646,7 @@ onMounted(() => {
 .status-timeline__item::before {
   content: "";
   position: absolute;
-  left: 0.5rem;
+  left: 0.4rem;
   top: 0.7rem;
   width: 2px;
   height: calc(100% - 0.7rem);

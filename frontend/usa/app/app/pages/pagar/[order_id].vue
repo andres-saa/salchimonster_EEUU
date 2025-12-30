@@ -148,11 +148,11 @@
 
         <!-- ===== Footer ===== -->
         <footer class="receipt-footer">
-          <a :href="whatsappUrl" target="_blank" class="full-width-link">
+          <!-- <a :href="whatsappUrl" target="_blank" class="full-width-link">
             <button class="btn btn-whatsapp">
               <i class="pi pi-whatsapp"></i>Dudas?
             </button>
-          </a>
+          </a> -->
 
           <button
             @click="pay"

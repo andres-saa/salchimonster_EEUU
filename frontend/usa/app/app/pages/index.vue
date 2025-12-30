@@ -543,7 +543,7 @@ useHead(() => ({ title: pageTitle.value }))
 .menu-page {
   min-height: 100vh;
   color: #111827;
-
+  padding-bottom: 5rem;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 

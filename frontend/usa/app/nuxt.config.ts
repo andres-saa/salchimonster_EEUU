@@ -40,14 +40,6 @@ export default defineNuxtConfig({
     '@primevue/nuxt-module'
 
   ],
-
-   runtimeConfig: {
-    public: {
-      stripeApiBase: process.env.NUXT_PUBLIC_STRIPE_API_BASE,
-      stripeCurrency: process.env.NUXT_PUBLIC_STRIPE_CURRENCY, // "usd" por ejemplo
-      stripePublishableKey: process.env.NUXT_PUBLIC_STRIPE_PK // opcional fallback
-    }
-  },
   primevue: {
         options: {
             theme: {

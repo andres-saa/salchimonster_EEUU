@@ -1,25 +1,32 @@
 <template>
   <Transition name="modal-fade">
-    <div class="search-modal" v-if="uiStore.isSearchOpen">
+    <div v-if="uiStore.isSearchOpen" class="search-modal">
       <div class="menu-background">
         <div class="search-sticky-header">
           <div class="header-content">
             <div class="search-bar-container">
               <i class="fas fa-search search-icon"></i>
+
               <input
                 ref="searchInputRef"
-                type="text"
                 v-model="searchQuery"
+                type="text"
                 class="search-input"
                 :placeholder="t('search_placeholder')"
                 @input="onSearchInput"
               />
-              <button v-if="searchQuery" @click="clearSearch" class="search-clear-btn" type="button">
+
+              <button
+                v-if="searchQuery"
+                class="search-clear-btn"
+                type="button"
+                @click="clearSearch"
+              >
                 ✕
               </button>
             </div>
 
-            <button class="close-modal-btn" @click="closeModal" type="button">
+            <button class="close-modal-btn" type="button" @click="closeModal">
               {{ t('close') }}
             </button>
           </div>
@@ -33,7 +40,7 @@
         <div v-else class="menu-content">
           <div v-if="filteredCategories.length === 0 && !menuPending" class="no-results">
             <p>{{ t('no_results', { q: searchQuery }) }} ☹️</p>
-            <button @click="clearSearch" class="reset-btn" type="button">
+            <button class="reset-btn" type="button" @click="clearSearch">
               {{ t('see_all_menu') }}
             </button>
           </div>
@@ -49,8 +56,9 @@
                 class="menu-category-section__title"
                 :style="shouldUseWhiteText(index) ? 'color:white' : ''"
               >
-                {{ formatLabel(cat.category_name) }}
+                {{ formatLabel(cat.category_name)?.toLowerCase() }}
               </h2>
+
               <p
                 class="menu-category-section__count"
                 :style="shouldUseWhiteText(index) ? 'color:white' : ''"
@@ -91,6 +99,7 @@ const sitesStore = useSitesStore()
 const menuStore = useMenuStore()
 const uiStore = useUIStore()
 const userStore = useUserStore()
+
 const searchInputRef = ref(null)
 
 /* ================= i18n ================= */
@@ -108,7 +117,7 @@ const DICT = {
     no_results: 'No encontramos productos que coincidan con "{q}"'
   },
   en: {
-    search_placeholder: "What are you craving today?",
+    search_placeholder: 'What are you craving today?',
     close: 'Close',
     loading_menu: 'Loading our menu...',
     products: 'products',
@@ -186,6 +195,7 @@ const { data: rawCategoriesData, refresh, pending: menuPending } = useFetch(
   }
 )
 
+/* Cache (cliente) */
 if (process.client) {
   const cachedWrapper = menuStore.getMenuBySite(siteId.value)
   if (cachedWrapper && cachedWrapper.data && cachedWrapper.timestamp) {
@@ -207,7 +217,7 @@ watch(
   { immediate: true }
 )
 
-/* ================= Normalization ================= */
+/* ================= Helpers ================= */
 const normalize = (str) =>
   String(str || '')
     .toLowerCase()
@@ -216,30 +226,42 @@ const normalize = (str) =>
     .trim()
 
 const formatLabel = (str) => {
-  const s = String(str || '').toLowerCase()
+  const s = String(str || '')
+  if (!s) return ''
+  // Capitaliza suave sin destruir el resto
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/* ================= Base categories ================= */
+/* ================= Base categories (RESPONDE AL IDIOMA) ================= */
 const baseCategories = computed(() => {
   const raw = sourceData.value
   if (!raw || !Array.isArray(raw.categorias)) return []
+
+  const isEn = lang.value === 'en'
 
   return raw.categorias
     .filter((cat) => cat.visible && Array.isArray(cat.products) && cat.products.length > 0)
     .map((cat) => {
       const category_id = Number(cat.categoria_id)
-      const category_name = cat.categoria_descripcion || cat.english_name || ''
+
+      // ✅ AQUÍ: nombre de categoría según idioma actual
+      const category_name = isEn
+        ? (cat.english_name || cat.categoria_descripcion || '')
+        : (cat.categoria_descripcion || cat.english_name || '')
 
       const products = (cat.products || []).map((p) => ({
         ...p,
         id: p.producto_id,
+
+        // Nombre según disponibilidad (ya cubre EN si existe english_name)
         product_name:
           p.productogeneral_descripcionweb ||
           p.productogeneral_descripcion ||
           p.english_name ||
           '',
+
         price: Number(p.productogeneral_precio ?? 0),
+
         image_url:
           p.productogeneral_urlimagen ||
           (p.lista_productobase &&
@@ -298,7 +320,11 @@ onMounted(async () => {
         }
       })
     },
-    { root: document.querySelector('.search-modal'), rootMargin: '0px 0px 20% 0px', threshold: 0.01 }
+    {
+      root: document.querySelector('.search-modal'),
+      rootMargin: '0px 0px 20% 0px',
+      threshold: 0.01
+    }
   )
 
   await doClientRefresh(refresh)
@@ -329,9 +355,11 @@ const setProductRef = (productId, categoryId, el) => {
     delete productRefs.value[productId]
     return
   }
+
   productRefs.value[productId] = el
   el.classList.add('menu-product-card--hidden')
   el.dataset.productId = String(productId)
+
   if (productObserver.value) productObserver.value.observe(el)
 }
 </script>
@@ -552,5 +580,9 @@ const setProductRef = (productId, categoryId, el) => {
     padding: 8px 12px;
     font-size: 0.9rem;
   }
+}
+
+*{
+  text-transform: capitalize;
 }
 </style>

@@ -1,9 +1,9 @@
-<!-- pages/gracias-stripe.vue -->
+<!-- pages/gracias-epayco.vue -->
 <template>
   <ClientOnly>
     <div class="page">
-      <!-- ===== MAIN CARD ===== -->
-      <div class="card" v-if="!isLoading && (order?.order_id || hasStripeInfo)">
+      <div class="card" v-if="!isLoading && (hasOrder || hasEpayco)">
+        <!-- ===== HEADER ===== -->
         <header class="header">
           <h1 class="title">Estado del pago</h1>
 
@@ -11,8 +11,13 @@
             {{ statusLabel }}
           </div>
 
-          <p class="subtitle" v-if="statusHint">
-            {{ statusHint }}
+          <p class="subtitle" v-if="epaycoPayload?.title_response || epaycoPayload?.text_response">
+            <b>{{ epaycoPayload?.title_response || '' }}</b>
+            <span v-if="epaycoPayload?.text_response"> — {{ epaycoPayload.text_response }}</span>
+          </p>
+
+          <p class="reason" v-if="epaycoData?.x_response_reason_text">
+            {{ epaycoData.x_response_reason_text }}
           </p>
 
           <div class="order-id" v-if="order?.order_id">
@@ -24,11 +29,17 @@
             <b>Fecha:</b> {{ (order.latest_status_timestamp || '').split('T')[0] || '-' }}
             <span class="dot">•</span>
             <b>Hora:</b>
-            {{ (order.latest_status_timestamp || '').split('T')[1]?.split(':')?.slice(0,2)?.join(':') || '-' }}
+            {{
+              (order.latest_status_timestamp || '')
+                .split('T')[1]
+                ?.split(':')
+                ?.slice(0, 2)
+                ?.join(':') || '-'
+            }}
           </p>
         </header>
 
-        <!-- ===== PRODUCTS ===== -->
+        <!-- ===== BODY ===== -->
         <section class="section" v-if="order?.order_id">
           <h2 class="section-title">Productos</h2>
 
@@ -80,7 +91,6 @@
           </div>
         </section>
 
-        <!-- ===== TOTALS ===== -->
         <section class="section" v-if="order?.order_id">
           <h2 class="section-title">Totales</h2>
 
@@ -107,39 +117,77 @@
           </div>
         </section>
 
-        <!-- ===== STRIPE INFO ===== -->
-        <section class="section" v-if="hasStripeInfo">
-          <h2 class="section-title">Información de pago (Stripe)</h2>
+        <!-- ===== EPAYCO INFO (SIEMPRE) ===== -->
+        <section class="section" v-if="hasEpayco">
+          <h2 class="section-title">Información de pago (ePayco)</h2>
 
           <div class="pay-box">
-            <div class="pay-row" v-if="orderId">
-              <span class="label">Order ID</span>
-              <span class="val">{{ orderId }}</span>
+            <div class="pay-row">
+              <span class="label">Ref. Comercio</span>
+              <span class="val">{{ epaycoData?.x_id_factura || epaycoData?.x_id_invoice || '-' }}</span>
             </div>
 
-            <div class="pay-row" v-if="paymentIntent">
-              <span class="label">PaymentIntent</span>
-              <span class="val">{{ paymentIntent }}</span>
+            <div class="pay-row">
+              <span class="label">Ref. ePayco</span>
+              <span class="val">{{ epaycoData?.x_ref_payco || refPayco || '-' }}</span>
             </div>
 
-            <div class="pay-row" v-if="redirectStatus">
+            <div class="pay-row">
+              <span class="label">Transacción</span>
+              <span class="val">{{ epaycoData?.x_transaction_id || '-' }}</span>
+            </div>
+
+            <div class="pay-row">
+              <span class="label">Fecha</span>
+              <span class="val">{{ epaycoData?.x_transaction_date || epaycoData?.x_fecha_transaccion || '-' }}</span>
+            </div>
+
+            <div class="pay-row">
               <span class="label">Estado</span>
-              <span class="val" :class="statusTextClass">{{ redirectStatus }}</span>
+              <span class="val" :class="statusTextClass">
+                {{ epaycoData?.x_transaction_state || '-' }}
+              </span>
             </div>
 
-            <div class="pay-row" v-if="order?.payment_method">
-              <span class="label">Método</span>
-              <span class="val">{{ String(order.payment_method).toLowerCase() }}</span>
+            <div class="pay-row">
+              <span class="label">Respuesta</span>
+              <span class="val">{{ epaycoData?.x_response || epaycoData?.x_respuesta || '-' }}</span>
             </div>
+
+            <div class="pay-row">
+              <span class="label">Motivo</span>
+              <span class="val">{{ epaycoData?.x_response_reason_text || '-' }}</span>
+            </div>
+
+            <div class="pay-row">
+              <span class="label">Banco</span>
+              <span class="val">{{ epaycoData?.x_bank_name || '-' }}</span>
+            </div>
+
+            <div class="pay-row">
+              <span class="label">Tarjeta</span>
+              <span class="val">{{ epaycoData?.x_cardnumber || '-' }}</span>
+            </div>
+
+            <div class="pay-row">
+              <span class="label">Monto</span>
+              <span class="val">{{ pesos(epaycoData?.x_amount_ok ?? epaycoData?.x_amount ?? 0) }}</span>
+            </div>
+
+            <a
+              v-if="refPayco"
+              class="btn btn-ghost"
+              :href="`https://secure.epayco.co/landingresume?ref_payco=${refPayco}`"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ver comprobante (ePayco)
+            </a>
           </div>
         </section>
 
         <!-- ===== ACTIONS ===== -->
         <footer class="actions">
-          <a class="btn btn-whatsapp" :href="whatsappUrl" target="_blank" rel="noreferrer">
-            Escribir por WhatsApp
-          </a>
-
           <NuxtLink class="btn btn-black" to="/">
             Volver al menú
           </NuxtLink>
@@ -154,14 +202,22 @@
         <div v-else class="error">
           <h2>No se pudo cargar la información</h2>
           <p>Si necesitas ayuda, escríbenos por WhatsApp.</p>
-
-          <a class="btn btn-whatsapp" :href="whatsappUrl" target="_blank" rel="noreferrer">
-            Escribir por WhatsApp
-          </a>
-
           <NuxtLink class="btn btn-black" to="/">Volver al menú</NuxtLink>
         </div>
       </div>
+
+      <!-- ✅ WhatsApp flotante (igual al otro componente) -->
+      <a
+        v-if="showWhatsappFloat"
+        :href="whatsappFloatUrl"
+        target="_blank"
+        rel="noopener"
+        class="wsp-float"
+        aria-label="Abrir WhatsApp"
+        title="¿Tienes dudas? Escríbenos"
+      >
+        <Icon size="xx-large" name="mdi:whatsapp" class="wsp-icon" />
+      </a>
     </div>
   </ClientOnly>
 </template>
@@ -171,20 +227,21 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from '#imports'
 
 const URI = 'https://backend.salchimonster.com'
-const route = useRoute()
 
+const route = useRoute()
 const isLoading = ref(true)
+
+const refPayco = computed(() => String(route.query?.ref_payco || ''))
 const order = ref(null)
 
-// ===== Query params Stripe =====
-// Stripe suele agregar: payment_intent, payment_intent_client_secret, redirect_status
-const orderId = computed(() => String(route.query?.order_id || route.params?.order_id || '').trim())
-const paymentIntent = computed(() => String(route.query?.payment_intent || '').trim())
-const redirectStatus = computed(() => String(route.query?.redirect_status || '').trim())
+// Guarda TODO el payload que devuelve ePayco (incluye success/title_response/...)
+const epaycoPayload = ref(null)
+// Guarda SOLO el detalle (payload.data)
+const epaycoData = ref(null)
 
-const hasStripeInfo = computed(() => !!orderId.value || !!paymentIntent.value || !!redirectStatus.value)
+const hasOrder = computed(() => !!order.value?.order_id)
+const hasEpayco = computed(() => !!epaycoData.value)
 
-// ===== Utils =====
 const pesos = (v) => {
   const n = Number(v || 0)
   return new Intl.NumberFormat('es-CO', {
@@ -202,121 +259,125 @@ const calcSubtotal = () => {
   return pagocon + desc - envio
 }
 
-// ===== Estado Stripe (solo con redirect_status) =====
-const stripeKind = computed(() => {
-  const s = String(redirectStatus.value || '').toLowerCase()
-  if (!s) return order.value?.order_id ? 'ok_unknown' : 'none'
+// ===== Detectar estado con tu respuesta real =====
+const paymentKind = computed(() => {
+  const d = epaycoData.value || {}
+  const state = String(d.x_transaction_state || '').toLowerCase()
+  const resp = String(d.x_response || d.x_respuesta || '').toLowerCase()
+  const type = String(d.x_type_payment || '').toLowerCase()
+  const codState = Number(d.x_cod_transaction_state ?? NaN)
+  const codResp = Number(d.x_cod_response ?? d.x_cod_respuesta ?? NaN)
 
-  if (s === 'succeeded') return 'ok'
-  if (s === 'failed') return 'failed'
-  if (s === 'canceled') return 'canceled'
-  if (s === 'processing') return 'processing'
-  return 'unknown'
+  if (state.includes('acept') || resp.includes('acept') || codResp === 1) return 'ok'
+  if (state.includes('cancel') || type === 'canceled' || codState === 11) return 'canceled'
+  if (resp.includes('rechaz') || state.includes('rechaz') || codResp === 2) return 'failed'
+
+  return hasEpayco.value ? 'unknown' : 'none'
 })
 
 const statusLabel = computed(() => {
-  switch (stripeKind.value) {
+  switch (paymentKind.value) {
     case 'ok': return 'Pago aprobado ✅'
-    case 'failed': return 'Pago fallido ❌'
     case 'canceled': return 'Pago cancelado ⚠️'
-    case 'processing': return 'Pago en proceso ⏳'
-    case 'ok_unknown': return 'Pago recibido ✅'
+    case 'failed': return 'Pago rechazado ❌'
     case 'unknown': return 'Pago en revisión'
     default: return 'Sin información'
   }
 })
 
-const statusHint = computed(() => {
-  switch (stripeKind.value) {
-    case 'ok': return 'Tu pago fue confirmado correctamente.'
-    case 'failed': return 'El pago no pudo completarse. Puedes intentarlo de nuevo.'
-    case 'canceled': return 'El pago fue cancelado.'
-    case 'processing': return 'El pago está siendo procesado. Si no cambia, contáctanos.'
-    case 'ok_unknown': return 'Gracias. Si ves algún problema, escríbenos.'
-    default: return ''
-  }
-})
-
 const statusClass = computed(() => {
-  switch (stripeKind.value) {
-    case 'ok':
-    case 'ok_unknown':
-      return 'ok'
-    case 'processing':
-      return 'warn'
-    case 'canceled':
-      return 'warn'
-    case 'failed':
-      return 'bad'
-    case 'unknown':
-      return 'neutral'
-    default:
-      return 'neutral'
+  switch (paymentKind.value) {
+    case 'ok': return 'ok'
+    case 'canceled': return 'warn'
+    case 'failed': return 'bad'
+    case 'unknown': return 'neutral'
+    default: return 'neutral'
   }
 })
 
 const statusTextClass = computed(() => {
-  switch (stripeKind.value) {
-    case 'ok':
-    case 'ok_unknown':
-      return 'green'
-    case 'processing':
-      return 'orange'
-    case 'canceled':
-      return 'orange'
-    case 'failed':
-      return 'red'
-    default:
-      return ''
+  switch (paymentKind.value) {
+    case 'ok': return 'green'
+    case 'canceled': return 'orange'
+    case 'failed': return 'red'
+    default: return ''
   }
 })
 
-// ===== WhatsApp =====
-const whatsappUrl = computed(() => {
-  const baseUrl = 'https://api.whatsapp.com/send'
-  const phone = '573053447255'
+// ------------------------------------------------------------------------
+// ✅ WhatsApp flotante: teléfono viene en la orden (site_phone)
+// ------------------------------------------------------------------------
+function cleanPhone(raw) {
+  if (!raw) return null
+  const digits = String(raw).replace(/\D/g, '')
+  return digits.length >= 10 ? digits : null
+}
 
-  const ord = order.value?.order_id || orderId.value || ''
-  const pi = paymentIntent.value || ''
-  const st = redirectStatus.value || ''
+const whatsappPhone = computed(() => cleanPhone(order.value?.site_phone))
+
+const showWhatsappFloat = computed(() => !!whatsappPhone.value)
+
+const whatsappFloatUrl = computed(() => {
+  const phone = whatsappPhone.value
+  if (!phone) return '#'
+
+  const baseUrl = 'https://api.whatsapp.com/send'
+  const reason = epaycoData.value?.x_response_reason_text || ''
+  const ref = epaycoData.value?.x_ref_payco || refPayco.value || ''
+  const ord = order.value?.order_id || ''
 
   const msg = ord
-    ? `Hola, necesito ayuda con el pago de mi orden #${ord}. Stripe: ${pi ? `PI ${pi}. ` : ''}${st ? `Estado: ${st}.` : ''}`
-    : `Hola, necesito ayuda con un pago en Stripe. ${pi ? `PI ${pi}. ` : ''}${st ? `Estado: ${st}.` : ''}`
+    ? `Hola 😊 necesito ayuda con el pago de mi orden #${ord}. Ref ePayco: ${ref}. ${reason}`
+    : `Hola 😊 necesito ayuda con un pago ePayco. Ref ePayco: ${ref}. ${reason}`
 
   const params = new URLSearchParams({ phone, text: msg })
   return `${baseUrl}?${params.toString()}`
 })
 
-// ===== Load order =====
+// ✅ Orden ID que devuelve ePayco (la “factura” / invoice que tú mandaste como order_id)
+const orderIdFromEpayco = computed(() => {
+  const d = epaycoData.value || {}
+  // ePayco suele devolver el invoice como x_id_invoice o x_id_factura (según integración)
+  return String(d.x_id_invoice || d.x_id_factura || '').trim()
+})
+
 onMounted(async () => {
   isLoading.value = true
   try {
-    if (!orderId.value) {
-      // igual mostramos info stripe si llegó algo, pero sin order_id no podemos traer orden
+    const epayco = refPayco.value
+    if (!epayco) {
       isLoading.value = false
       return
     }
 
-    // Intento 1: /order-by-id/:id
+    // 1) Consultar ePayco
     try {
-      const data = await $fetch(`${URI}/order-by-id/${encodeURIComponent(orderId.value)}`)
-      if (data?.order_id) {
-        order.value = data
-        return
-      }
-    } catch {}
+      const payload = await $fetch(`https://secure.epayco.co/validation/v1/reference/${epayco}`)
+      epaycoPayload.value = payload || null
+      epaycoData.value = payload?.data || null
+    } catch {
+      epaycoPayload.value = null
+      epaycoData.value = null
+    }
 
-    // Fallback: /order/:id
+    // 2) Cargar la orden usando el order_id que entrega ePayco
+    const ordId = orderIdFromEpayco.value
+    if (!ordId) {
+      order.value = null
+      return
+    }
+
+    // ✅ como pediste: endpoint /order/:order_id
     try {
-      const data2 = await $fetch(`${URI}/order/${encodeURIComponent(orderId.value)}`)
-      if (data2?.order_id) {
-        order.value = data2
-        return
+        order.value = await $fetch(`${URI}/order-by-id/${encodeURIComponent(ordId)}`)
+    } catch {
+      // fallback opcional si tu backend usa otro endpoint
+      try {
+        order.value = await $fetch(`${URI}/order-by-id/${encodeURIComponent(ordId)}`)
+      } catch {
+        order.value = null
       }
-    } catch {}
-
-    order.value = null
+    }
   } finally {
     isLoading.value = false
   }
@@ -360,10 +421,21 @@ onMounted(async () => {
 }
 
 .subtitle{
-  margin:10px 0 0;
+  margin:8px 0 0;
   font-size:13px;
   color:#374151;
+  font-weight:700;
+}
+
+.reason{
+  margin:8px 0 0;
+  font-size:13px;
   font-weight:800;
+  color:#111827;
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  padding:10px;
+  border-radius:12px;
 }
 
 .status-badge{
@@ -377,6 +449,7 @@ onMounted(async () => {
   text-transform:uppercase;
   border:1px solid transparent;
 }
+
 .status-badge.ok{ background:#dcfce7; color:#166534; border-color:#86efac; }
 .status-badge.warn{ background:#ffedd5; color:#9a3412; border-color:#fdba74; }
 .status-badge.bad{ background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
@@ -491,8 +564,13 @@ onMounted(async () => {
   letter-spacing:.4px;
 }
 .btn:active{ transform:scale(.98); }
-.btn-whatsapp{ background:#00b66c; color:#fff; }
 .btn-black{ background:#111827; color:#fff; }
+.btn-ghost{
+  margin-top:10px;
+  background:transparent;
+  border-color:#111827;
+  color:#111827;
+}
 
 /* States */
 .state{ width:100%; max-width:520px; text-align:center; padding:32px 16px; }
@@ -521,5 +599,33 @@ onMounted(async () => {
 @media (max-width:420px){
   .actions{ flex-direction:column; }
   .pay-row{ grid-template-columns:1fr; }
+}
+
+/* ✅ WhatsApp flotante (igual al otro) */
+.wsp-float {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+
+.wsp-float:hover { transform: scale(1.05); }
+.wsp-float:active { transform: scale(0.98); }
+
+.wsp-icon :deep(svg) {
+  width: 40px;
+  height: 28px;
+  display: block;
 }
 </style>

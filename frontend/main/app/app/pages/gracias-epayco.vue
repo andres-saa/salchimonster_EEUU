@@ -30,7 +30,11 @@
             <span class="dot">•</span>
             <b>Hora:</b>
             {{
-              (order.latest_status_timestamp || '').split('T')[1]?.split(':')?.slice(0,2)?.join(':') || '-'
+              (order.latest_status_timestamp || '')
+                .split('T')[1]
+                ?.split(':')
+                ?.slice(0, 2)
+                ?.join(':') || '-'
             }}
           </p>
         </header>
@@ -120,7 +124,7 @@
           <div class="pay-box">
             <div class="pay-row">
               <span class="label">Ref. Comercio</span>
-              <span class="val">{{ epaycoData?.x_id_factura || '-' }}</span>
+              <span class="val">{{ epaycoData?.x_id_factura || epaycoData?.x_id_invoice || '-' }}</span>
             </div>
 
             <div class="pay-row">
@@ -184,10 +188,6 @@
 
         <!-- ===== ACTIONS ===== -->
         <footer class="actions">
-          <a class="btn btn-whatsapp" :href="whatsappUrl" target="_blank" rel="noreferrer">
-            Escribir por WhatsApp
-          </a>
-
           <NuxtLink class="btn btn-black" to="/">
             Volver al menú
           </NuxtLink>
@@ -202,12 +202,22 @@
         <div v-else class="error">
           <h2>No se pudo cargar la información</h2>
           <p>Si necesitas ayuda, escríbenos por WhatsApp.</p>
-          <a class="btn btn-whatsapp" :href="whatsappUrl" target="_blank" rel="noreferrer">
-            Escribir por WhatsApp
-          </a>
           <NuxtLink class="btn btn-black" to="/">Volver al menú</NuxtLink>
         </div>
       </div>
+
+      <!-- ✅ WhatsApp flotante (igual al otro componente) -->
+      <a
+        v-if="showWhatsappFloat"
+        :href="whatsappFloatUrl"
+        target="_blank"
+        rel="noopener"
+        class="wsp-float"
+        aria-label="Abrir WhatsApp"
+        title="¿Tienes dudas? Escríbenos"
+      >
+        <Icon size="xx-large" name="mdi:whatsapp" class="wsp-icon" />
+      </a>
     </div>
   </ClientOnly>
 </template>
@@ -258,13 +268,8 @@ const paymentKind = computed(() => {
   const codState = Number(d.x_cod_transaction_state ?? NaN)
   const codResp = Number(d.x_cod_response ?? d.x_cod_respuesta ?? NaN)
 
-  // Aceptada
   if (state.includes('acept') || resp.includes('acept') || codResp === 1) return 'ok'
-
-  // Cancelada (como tu ejemplo)
   if (state.includes('cancel') || type === 'canceled' || codState === 11) return 'canceled'
-
-  // Rechazada
   if (resp.includes('rechaz') || state.includes('rechaz') || codResp === 2) return 'failed'
 
   return hasEpayco.value ? 'unknown' : 'none'
@@ -299,20 +304,41 @@ const statusTextClass = computed(() => {
   }
 })
 
-const whatsappUrl = computed(() => {
-  const baseUrl = 'https://api.whatsapp.com/send'
-  const phone = '573053447255'
+// ------------------------------------------------------------------------
+// ✅ WhatsApp flotante: teléfono viene en la orden (site_phone)
+// ------------------------------------------------------------------------
+function cleanPhone(raw) {
+  if (!raw) return null
+  const digits = String(raw).replace(/\D/g, '')
+  return digits.length >= 10 ? digits : null
+}
 
+const whatsappPhone = computed(() => cleanPhone(order.value?.site_phone))
+
+const showWhatsappFloat = computed(() => !!whatsappPhone.value)
+
+const whatsappFloatUrl = computed(() => {
+  const phone = whatsappPhone.value
+  if (!phone) return '#'
+
+  const baseUrl = 'https://api.whatsapp.com/send'
   const reason = epaycoData.value?.x_response_reason_text || ''
   const ref = epaycoData.value?.x_ref_payco || refPayco.value || ''
   const ord = order.value?.order_id || ''
 
   const msg = ord
-    ? `Hola, necesito ayuda con el pago de mi orden #${ord}. Ref ePayco: ${ref}. ${reason}`
-    : `Hola, necesito ayuda con un pago ePayco. Ref ePayco: ${ref}. ${reason}`
+    ? `Hola 😊 necesito ayuda con el pago de mi orden #${ord}. Ref ePayco: ${ref}. ${reason}`
+    : `Hola 😊 necesito ayuda con un pago ePayco. Ref ePayco: ${ref}. ${reason}`
 
   const params = new URLSearchParams({ phone, text: msg })
   return `${baseUrl}?${params.toString()}`
+})
+
+// ✅ Orden ID que devuelve ePayco (la “factura” / invoice que tú mandaste como order_id)
+const orderIdFromEpayco = computed(() => {
+  const d = epaycoData.value || {}
+  // ePayco suele devolver el invoice como x_id_invoice o x_id_factura (según integración)
+  return String(d.x_id_invoice || d.x_id_factura || '').trim()
 })
 
 onMounted(async () => {
@@ -324,7 +350,7 @@ onMounted(async () => {
       return
     }
 
-    // 1) Consultar ePayco: devuelve { success, title_response, ..., data: {...} }
+    // 1) Consultar ePayco
     try {
       const payload = await $fetch(`https://secure.epayco.co/validation/v1/reference/${epayco}`)
       epaycoPayload.value = payload || null
@@ -334,13 +360,23 @@ onMounted(async () => {
       epaycoData.value = null
     }
 
-    // 2) Intentar traer la orden desde tu backend con x_ref_payco (o query ref_payco)
-    // Ajusta endpoint si el tuyo es diferente
-    const ref = String(epaycoData.value?.x_ref_payco || epayco).trim()
-    try {
-      order.value = await $fetch(`${URI}/order/epayco/${ref}`)
-    } catch {
+    // 2) Cargar la orden usando el order_id que entrega ePayco
+    const ordId = orderIdFromEpayco.value
+    if (!ordId) {
       order.value = null
+      return
+    }
+
+    // ✅ como pediste: endpoint /order/:order_id
+    try {
+        order.value = await $fetch(`${URI}/order-by-id/${encodeURIComponent(ordId)}`)
+    } catch {
+      // fallback opcional si tu backend usa otro endpoint
+      try {
+        order.value = await $fetch(`${URI}/order-by-id/${encodeURIComponent(ordId)}`)
+      } catch {
+        order.value = null
+      }
     }
   } finally {
     isLoading.value = false
@@ -528,7 +564,6 @@ onMounted(async () => {
   letter-spacing:.4px;
 }
 .btn:active{ transform:scale(.98); }
-.btn-whatsapp{ background:#00b66c; color:#fff; }
 .btn-black{ background:#111827; color:#fff; }
 .btn-ghost{
   margin-top:10px;
@@ -564,5 +599,33 @@ onMounted(async () => {
 @media (max-width:420px){
   .actions{ flex-direction:column; }
   .pay-row{ grid-template-columns:1fr; }
+}
+
+/* ✅ WhatsApp flotante (igual al otro) */
+.wsp-float {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+
+.wsp-float:hover { transform: scale(1.05); }
+.wsp-float:active { transform: scale(0.98); }
+
+.wsp-icon :deep(svg) {
+  width: 40px;
+  height: 28px;
+  display: block;
 }
 </style>

@@ -148,12 +148,7 @@
 
         <!-- ===== Footer ===== -->
         <footer class="receipt-footer">
-          <a :href="whatsappUrl" target="_blank" class="full-width-link">
-            <button class="btn btn-whatsapp">
-              <i class="pi pi-whatsapp"></i>Dudas?
-            </button>
-          </a>
-
+     
           <button
             @click="pay"
             class="btn btn-pay"
@@ -220,6 +215,17 @@
       <!-- ===== /Stripe Dialog ===== -->
     </div>
   </ClientOnly>
+      <a
+      v-if="showWhatsappFloat"
+      :href="whatsappFloatUrl"
+      target="_blank"
+      rel="noopener"
+      class="wsp-float"
+      aria-label="Abrir WhatsApp"
+      title="¿Tienes dudas? Escríbenos"
+    >
+      <Icon size="xx-large" name="mdi:whatsapp" class="wsp-icon" />
+    </a>
 </template>
 
 <script setup>
@@ -232,6 +238,34 @@ import { URI, SELF_URI } from "~/service/conection";
 // import Dialog from "primevue/dialog";
 
 // ===== Runtime Config =====
+
+
+
+const phone = ref("")
+
+function cleanPhone(raw) {
+  if (!raw) return null
+  const digits = String(raw).replace(/\D/g, '')
+  return digits.length >= 10 ? digits : null
+}
+
+const whatsappPhone = computed(() => cleanPhone(phone.value))
+
+const showWhatsappFloat = computed(() => {
+   
+  return !!whatsappPhone.value
+})
+
+ 
+const whatsappFloatUrl = computed(() => {
+  const phone = whatsappPhone.value
+  if (!phone) return '#'
+
+  const text = `Hola 😊 Tengo una duda `
+  const params = new URLSearchParams({ phone, text })
+  return `https://api.whatsapp.com/send?${params.toString()}`
+})
+
 const config = useRuntimeConfig();
 const stripeApiBase = config.public.stripeApiBase || "https://api.stripe.salchimonster.com";
 const DEFAULT_CURRENCY = (config.public.stripeCurrency || "usd").toLowerCase();
@@ -307,7 +341,10 @@ onMounted(async () => {
 
   try {
     const data = await $fetch(`${URI}/order-by-id/${orderId}`);
-    if (data && data.order_id) order.value = data;
+    if (data && data.order_id){ 
+      order.value = data
+      phone.value = data.site_phone
+    };
   } catch (err) {
     console.error("Error cargando pedido:", err);
   } finally {
@@ -315,22 +352,7 @@ onMounted(async () => {
   }
 });
 
-// ===== WhatsApp =====
-const whatsappUrl = computed(() => {
-  const baseUrl = "https://api.whatsapp.com/send";
-  let phone = 573053447255;
-
-  if (order.value?.order_id) {
-    const prefix = order.value.order_id.split("-")[0];
-    if (["NEW", "NEK", "FIL", "NYK"].includes(prefix)) phone = 13477929350;
-  }
-
-  const params = new URLSearchParams({
-    phone: String(phone),
-    text: `Hola, tengo dudas sobre el pago de mi orden #${order.value?.order_id || ""}`
-  });
-  return `${baseUrl}?${params.toString()}`;
-});
+ 
 
 // ===== Pagar con Stripe (abre el MODAL) =====
 const pay = async () => {
@@ -723,4 +745,41 @@ onBeforeUnmount(() => {
 }
 
 .error-msg { color: #dc2626; font-weight: 800; text-align: center; }
+
+
+.wsp-float {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+  z-index: 9999;
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+
+.wsp-float:hover {
+  transform: scale(1.05);
+}
+
+.wsp-float:active {
+  transform: scale(0.98);
+}
+
+.wsp-icon :deep(svg) {
+  width: 40px;
+  height: 28px;
+  display: block;
+}
+
+*{
+  font-family: sans-serif;
+}
 </style>

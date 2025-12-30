@@ -27,13 +27,6 @@ const updateIsMobile = () => {
   isMobile.value = window.matchMedia('(max-width: 900px)').matches
 }
 
-// ✅ detectar si estamos en rutas "carta" (drawer desktop)
-const isCartaRoute = computed(() => {
-  const path = route.path || ''
-  const keywords = ['/carta', '/cart', '/sedes', '/franquicias', '/colaboraciones', '/sonando', '/producto', '/pay', '/gracias']
-  return keywords.some(keyword => path.includes(keyword))
-})
-
 // ✅ Teleport SOLO cuando lo necesitamos (móvil o drawer desktop)
 const shouldTeleport = computed(() => isMobile.value || isCartaRoute.value)
 
@@ -43,14 +36,6 @@ const shouldTeleport = computed(() => isMobile.value || isCartaRoute.value)
 const currentCountry = computed(() => {
   const code = user.country?.code || user.country || 'us'
   return String(code).toLowerCase()
-})
-
-// =========================================
-// 🌍 TRADUCCIONES (sidebar)
-// =========================================
-const tSidebar = computed(() => {
-  const langKey = (user.lang?.name || 'us').toLowerCase()
-  return texts[langKey]?.sidebar || {}
 })
 
 // =========================================
@@ -78,7 +63,7 @@ const fetchPosts = async () => {
 // 🔹 Menú de Navegación
 // =========================================
 const menus = computed(() => {
-  const langKey = (user.lang?.name || 'us').toLowerCase()
+  const langKey = (user.lang?.name || 'es').toLowerCase()
   const t = texts[langKey]?.menus || {}
 
   return [
@@ -87,7 +72,7 @@ const menus = computed(() => {
     { label: t.carta || 'Carta', to: `/carta`, icon: 'mdi:food-fork-drink' },
     { label: t.rastrear || 'Rastrear', to: `/rastrear`, icon: 'mdi:map-clock' },
     { label: t.ayuda || 'Ayuda', to: `/pqr`, icon: 'mdi:lifebuoy' },
-    // { label: t.fraquicias || 'Franquicias', to: `/franquicias`, icon: 'mdi:lifebuoy' },
+    // { label: t.franquicias || 'Franquicias', to: `/franquicias`,icon: 'mdi:store' },
     { label: t.colaboraciones || 'Colaboraciones', to: `/colaboraciones`, icon: 'mdi:handshake' },
     { label: t.sonando || 'Sonando', to: `/sonando`, icon: 'mdi:music-circle' }
   ]
@@ -96,7 +81,7 @@ const menus = computed(() => {
 // 🔹 Helpers visuales
 const networkLabel = (type) => {
   const map = { instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', tiktok: 'TikTok' }
-  return map[type] || (tSidebar.value?.view_post || 'Ver post')
+  return map[type] || 'Ver Post'
 }
 
 const getImageUrl = (identifier) => {
@@ -148,6 +133,15 @@ const handleScroll = () => {
 
   lastScrollY.value = currentY
 }
+
+// =========================================
+// ✅ detectar si estamos en rutas "carta" (drawer desktop)
+// =========================================
+const isCartaRoute = computed(() => {
+  const path = route.path || ''
+  const keywords = ['/carta', '/cart', '/sedes', '/franquicias', '/colaboraciones', '/sonando', '/producto', '/pay', '/gracias']
+  return keywords.some(keyword => path.includes(keyword))
+})
 
 watch(isCartaRoute, (val) => {
   // si entramos a ruta de drawer desktop, cerramos por defecto
@@ -206,15 +200,8 @@ onBeforeUnmount(() => {
       }"
     >
       <div class="mobile-header" v-if="store.side_bar_visible">
-        <h3 class="mobile-header__title">
-          {{ tSidebar.menu_title || 'Menú' }}
-        </h3>
-
-        <button
-          class="close-btn"
-          @click="closeSidebar"
-          :aria-label="tSidebar.close_menu_aria || 'Cerrar menú'"
-        >
+        <h3 class="mobile-header__title">Menú</h3>
+        <button class="close-btn" @click="closeSidebar" aria-label="Cerrar menú">
           <Icon name="mdi:close" />
         </button>
       </div>
@@ -236,7 +223,7 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="sidebar-divider" v-if="store.side_bar_visible || !isCartaRoute">
-        <span>{{ tSidebar.our_networks || 'Nuestras Redes' }}</span>
+        <span>Nuestras Redes</span>
       </div>
 
       <div v-if="loading" class="posts-wrapper">
@@ -263,9 +250,7 @@ onBeforeUnmount(() => {
             <div class="post-gradient"></div>
 
             <div class="post-overlay" :class="`post-overlay--${post.type}`">
-              <span class="cta-button">
-                {{ tSidebar.view_on || 'Ver en' }} {{ networkLabel(post.type) }}
-              </span>
+              <span class="cta-button">Ver en {{ networkLabel(post.type) }}</span>
             </div>
 
             <div class="post-badge" :class="`post-badge--${post.type}`">
@@ -279,7 +264,7 @@ onBeforeUnmount(() => {
         </a>
 
         <div v-if="dynamicPosts.length === 0" class="no-posts">
-          <p>{{ tSidebar.follow_us || '¡Síguenos en nuestras redes!' }}</p>
+          <p>¡Síguenos en nuestras redes!</p>
         </div>
       </div>
 
