@@ -595,7 +595,7 @@ const route = useRoute()
 const BACKEND_BASE = 'https://backend.salchimonster.com'
 const LOCATIONS_BASE = 'https://api.locations.salchimonster.com'
 const URI = 'https://backend.salchimonster.com'
-const MAIN_DOMAIN = 'salchimonster.com'
+const MAIN_DOMAIN = 'usa.salchimonster.com'
 
 const map = ref(null)
 const leafletModule = ref(null)
