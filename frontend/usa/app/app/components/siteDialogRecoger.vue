@@ -139,7 +139,7 @@ const cities = ref([])
 const fixedCity = ref(null)
 
 // CIUDAD FIJA EN 18
-const cityId = ref(18) 
+const cityId = ref(15) 
 
 /* ================= HELPERS ================= */
 const handleImageError = (e) => { e.target.style.display = 'none' }
