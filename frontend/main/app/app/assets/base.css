@@ -28,3 +28,36 @@
 
   --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08); /* Sombra suave */
 }
+
+
+
+:root{
+    --primary-color:#ff6200;
+    --seconday-color:rgba(11, 131, 65)
+}
+
+:root {
+  --primary:#ff6200; /* Rojo marca (ajústalo) */
+  --primary-dark:#cf4f00;
+  --text-main: #1f2937;
+  --text-light: #6b7280;
+  --bg-page: #f9fafb;
+  --bg-card: #ffffff;
+  --border: #e5e7eb;
+ 
+  --primary-hover: #333333;
+  --bg-card: #ffffff;
+  --text-main: #1f2937;
+  --text-secondary: #6b7280;
+  --border-color: #e5e7eb;
+  --danger-bg: #fef2f2;
+  --danger-text: #dc2626;
+  --success-text: #16a34a;
+  --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+  --radius: 12px;
+  
+}
+
+*{
+  font-family: sans-serif;
+}
